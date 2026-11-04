@@ -1,0 +1,6 @@
+node_modules
+docs/architecture/out/*.html
+.DS_Store
+.idea/
+.vscode/
+.env

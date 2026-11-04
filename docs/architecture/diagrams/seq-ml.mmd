@@ -1,0 +1,27 @@
+sequenceDiagram
+    autonumber
+    actor U as Инспектор
+    participant CL as Клиент
+    participant C as core-service
+    participant ML as ml-service
+    participant M as media-service
+    participant DB as PostgreSQL (core)
+    Note over CL: Фото уже загружено в media-service (photoId)
+    CL->>C: POST /api/v1/category-suggestions {photoId}
+    C->>M: GET /internal/v1/photos/{id} (владелец и объект)
+    M-->>C: 200 метаданные
+    C->>ML: POST /internal/v1/classify {photoId} (таймаут 3 с)
+    ML->>M: GET /internal/v1/photos/{id}/content?variant=preview
+    M-->>ML: image/jpeg
+    ML->>ML: Предобработка 224×224, ONNX Runtime, softmax
+    alt ml-service недоступен или таймаут
+        C-->>CL: 200 {items: []} (подсказки нет, сценарий продолжается)
+    else Успех
+        ML-->>C: 200 {modelVersion, predictions: top-3 [{code, probability}]}
+        C->>C: Код → системная категория
+        C->>DB: INSERT ml_suggestions
+        C-->>CL: 200 {suggestionId, items[]}
+    end
+    U->>CL: Подтверждает или выбирает другую категорию
+    CL->>C: POST /api/v1/inspections/{id}/defects {categoryId, suggestionId, …}
+    C->>DB: UPDATE ml_suggestions SET decision, chosen_category_id

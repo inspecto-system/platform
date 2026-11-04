@@ -1,0 +1,43 @@
+flowchart TB
+    classDef client fill:#E8F1FB,stroke:#2F6DB5,color:#102A43
+    classDef edge fill:#F3E8FB,stroke:#7A3DB8,color:#2A1240
+    classDef java fill:#FDEBD8,stroke:#C25E00,color:#3D1E00
+    classDef go fill:#DDF4F7,stroke:#00838F,color:#00363A
+    classDef py fill:#FFF6D6,stroke:#B38600,color:#3D2E00
+    classDef store fill:#EDEDED,stroke:#555555,color:#1A1A1A
+
+    U1(["Инспектор / владелец<br/>на объекте"])
+    U2(["Пользователь<br/>за компьютером"])
+    A["Android-приложение<br/>Kotlin · Compose"]:::client
+    W["Web-приложение<br/>Next.js · TypeScript"]:::client
+    N["nginx<br/>TLS · маршрутизация · rate limit"]:::edge
+
+    subgraph BE["Серверная часть (внутренняя сеть)"]
+        C["core-service<br/>Java · Spring Boot"]:::java
+        M["media-service<br/>Go"]:::go
+        R["report-service<br/>Go"]:::go
+        ML["ml-service<br/>Python · ONNX"]:::py
+        G["Gotenberg<br/>HTML → PDF"]:::store
+        PG[("PostgreSQL<br/>core · media · report")]:::store
+        S3[("MinIO<br/>photos · reports")]:::store
+    end
+
+    U1 --> A
+    U2 --> W
+    A -- "HTTPS REST/JSON" --> N
+    W -- "HTTPS REST/JSON" --> N
+    N -- "/api/v1/**" --> C
+    N -- "/api/v1/photos/**" --> M
+    N -- "/api/v1/reports/**" --> R
+    C -- "REST" --> M
+    C -- "REST" --> ML
+    R -- "REST" --> C
+    R -- "REST" --> M
+    ML -- "REST" --> M
+    M -- "REST (access)" --> C
+    R -- "HTTP multipart" --> G
+    C --> PG
+    M --> PG
+    R --> PG
+    M --> S3
+    R --> S3

@@ -1,0 +1,28 @@
+erDiagram
+    CORE_observation_photos }o--|| MEDIA_photos : "photo_id (UUID, без FK)"
+    CORE_inspections ||--o{ REPORT_report_jobs : "inspection_id (UUID, без FK)"
+    CORE_properties ||--o{ MEDIA_photos : "property_id"
+    CORE_properties ||--o{ REPORT_report_jobs : "property_id"
+
+    MEDIA_photos { uuid id PK
+        uuid owner_id
+        uuid property_id
+        text status
+        text original_key
+        text preview_key
+        text thumb_key
+        text content_type
+        bigint size_bytes
+        text sha256 }
+    REPORT_report_jobs { uuid id PK
+        uuid inspection_id
+        uuid property_id
+        uuid requested_by
+        text status
+        int attempts
+        text object_key
+        int page_count }
+    CORE_observation_photos { uuid id PK
+        uuid photo_id }
+    CORE_inspections { uuid id PK }
+    CORE_properties { uuid id PK }

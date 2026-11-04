@@ -1,0 +1,35 @@
+sequenceDiagram
+    autonumber
+    actor U as Инспектор
+    participant A as Android
+    participant WM as WorkManager
+    participant M as media-service
+    participant S3 as MinIO
+    participant C as core-service
+    participant DB as PostgreSQL
+    U->>A: Снимок дефекта (CameraX)
+    A->>A: Сжатие на устройстве (≤ 2560 px)
+    A->>WM: Постановка загрузки в очередь
+    WM->>M: POST /api/v1/photos (multipart: file, propertyId), Idempotency-Key
+    M->>C: GET /internal/v1/access/properties/{id}?userId&action=write
+    C-->>M: 200 allowed / 404
+    M->>M: Проверка сигнатуры, размера, числа пикселей,<br/>удаление EXIF, оригинал, превью, миниатюра
+    alt Недопустимый файл
+        M-->>WM: 400 UNSUPPORTED_MEDIA_TYPE / IMAGE_TOO_LARGE
+    else MinIO недоступен
+        M-->>WM: 503 DEPENDENCY_UNAVAILABLE → повтор с задержкой
+    else Успех
+        M->>S3: PUT photos/{propertyId}/{photoId}/{variant}
+        M->>DB: INSERT photos (status UPLOADED)
+        M-->>WM: 201 {id}
+    end
+    U->>A: Категория, серьёзность, описание
+    A->>C: POST /api/v1/inspections/{id}/defects {...}
+    C->>DB: INSERT defects, defect_observations (OPEN), defect_status_history
+    C-->>A: 201 {defectId, observationId}
+    A->>C: POST /api/v1/observations/{id}/photos {photoId}
+    C->>M: POST /internal/v1/photos/{photoId}/attach
+    M->>DB: UPDATE photos SET status = ATTACHED
+    M-->>C: 204
+    C->>DB: INSERT observation_photos
+    C-->>A: 201

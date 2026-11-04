@@ -1,0 +1,6 @@
+stateDiagram-v2
+    direction LR
+    [*] --> OPEN: первое наблюдение
+    OPEN --> OPEN: остался
+    OPEN --> RESOLVED: устранение подтверждено
+    RESOLVED --> OPEN: обнаружен снова

@@ -1,0 +1,32 @@
+erDiagram
+    users ||--o{ refresh_tokens : "сессии"
+    users ||--o{ properties : "владеет"
+    users ||--o{ defect_categories : "свои категории"
+    properties ||--o{ rooms : "содержит"
+    properties ||--o{ inspections : "осматривается"
+    checklist_templates ||--o{ checklist_template_items : "содержит"
+
+    users { uuid id PK
+        text email UK
+        text role }
+    refresh_tokens { uuid id PK
+        uuid user_id FK
+        text token_hash UK }
+    properties { uuid id PK
+        uuid owner_id FK
+        text type
+        text address }
+    rooms { uuid id PK
+        uuid property_id FK
+        text name }
+    inspections { uuid id PK
+        uuid property_id FK
+        text status }
+    defect_categories { uuid id PK
+        text code
+        uuid owner_id FK }
+    checklist_templates { uuid id PK
+        text code UK }
+    checklist_template_items { uuid id PK
+        uuid template_id FK
+        text element_group }

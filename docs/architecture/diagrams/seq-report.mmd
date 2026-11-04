@@ -1,0 +1,37 @@
+sequenceDiagram
+    autonumber
+    participant CL as Клиент
+    participant R as report-service
+    participant C as core-service
+    participant M as media-service
+    participant G as Gotenberg
+    participant S3 as MinIO
+    participant DB as PostgreSQL (report)
+    CL->>R: POST /api/v1/reports {inspectionId}
+    R->>C: GET /internal/v1/access/properties/{id}?userId&action=read
+    C-->>R: 200 / 404
+    R->>DB: INSERT report_jobs (QUEUED)
+    R-->>CL: 202 {id, status: QUEUED}
+    loop Воркер (SELECT … FOR UPDATE SKIP LOCKED)
+        R->>DB: status = RUNNING
+        R->>C: GET /internal/v1/inspections/{id}/report-data
+        C-->>R: 200 агрегат осмотра (JSON)
+        par Для каждого фото
+            R->>M: GET /internal/v1/photos/{id}/content?variant=preview
+            M-->>R: image/jpeg
+        end
+        R->>R: html/template + встраивание фото (data URI)
+        R->>G: POST /forms/chromium/convert/html (index.html)
+        G-->>R: application/pdf
+        R->>R: Проверка: страницы, размер ≤ лимита
+        R->>S3: PUT reports/{inspectionId}/{jobId}.pdf
+        R->>DB: status = DONE, page_count, size_bytes
+    end
+    alt Ошибка (core/media/Gotenberg недоступны)
+        R->>DB: attempts += 1, next_attempt_at (до 3 попыток) → FAILED
+    end
+    CL->>R: GET /api/v1/reports/{id} (опрос каждые 2 с)
+    R-->>CL: 200 {status: DONE}
+    CL->>R: GET /api/v1/reports/{id}/file
+    R->>S3: GET объекта
+    R-->>CL: 200 application/pdf

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="$lang$">
+<head>
+<meta charset="utf-8">
+<title>$pagetitle$</title>
+$for(css)$<link rel="stylesheet" href="$css$">
+$endfor$
+</head>
+<body>
+$for(include-before)$
+$include-before$
+$endfor$
+$if(toc)$
+<nav id="TOC" role="doc-toc">
+<h1>$toc-title$</h1>
+$table-of-contents$
+</nav>
+$endif$
+$body$
+</body>
+</html>

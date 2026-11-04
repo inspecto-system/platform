@@ -1,0 +1,40 @@
+erDiagram
+    inspections ||--o{ inspection_checklist_items : "включает"
+    rooms ||--o{ inspection_checklist_items : "проверяется"
+    rooms ||--o{ defects : "место"
+    defect_categories ||--o{ defects : "классифицирует"
+    defects ||--o{ defect_observations : "наблюдается"
+    inspections ||--o{ defect_observations : "фиксирует"
+    defect_observations ||--o{ observation_photos : "фото"
+    defects ||--o{ defect_status_history : "история"
+    defects |o--o{ ml_suggestions : "подсказка"
+
+    inspections { uuid id PK
+        uuid property_id FK
+        timestamptz inspected_at
+        text status }
+    inspection_checklist_items { uuid id PK
+        uuid inspection_id FK
+        uuid room_id FK
+        text result }
+    defects { uuid id PK
+        uuid property_id FK
+        uuid room_id FK
+        uuid category_id FK
+        text severity
+        text current_status }
+    defect_observations { uuid id PK
+        uuid defect_id FK
+        uuid inspection_id FK
+        text status }
+    observation_photos { uuid id PK
+        uuid observation_id FK
+        uuid photo_id }
+    defect_status_history { uuid id PK
+        uuid defect_id FK
+        text to_status }
+    ml_suggestions { uuid id PK
+        uuid photo_id
+        text decision }
+    rooms { uuid id PK }
+    defect_categories { uuid id PK }

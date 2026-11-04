@@ -1,0 +1,35 @@
+flowchart TB
+    classDef zone fill:#FAFAFA,stroke:#888888,color:#111111
+    subgraph PUB["Публичная зона"]
+        CLI["Android / браузер"]
+    end
+    subgraph DMZ["Сеть edge (docker network: edge)"]
+        N["nginx :443"]
+    end
+    subgraph APP["Сеть app (internal: true)"]
+        C["core :8081"]
+        M["media :8082"]
+        R["report :8083"]
+        ML["ml :8084"]
+    end
+    subgraph DATA["Сеть data (internal: true)"]
+        PG[("PostgreSQL :5432 TLS")]
+        S3[("MinIO :9000")]
+    end
+    subgraph RENDER["Сеть render (internal: true, без выхода в интернет)"]
+        G["Gotenberg :3000"]
+    end
+    CLI -- "HTTPS" --> N
+    N --> C
+    N --> M
+    N --> R
+    C --- PG
+    M --- PG
+    R --- PG
+    M --- S3
+    R --- S3
+    R --> G
+    C <--> M
+    C <--> R
+    C <--> ML
+    ML --> M
