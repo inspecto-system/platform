@@ -102,7 +102,7 @@
 
 | Проверка | Инструмент | Блокирует слияние |
 |---|---|---|
-| Уязвимости зависимостей | OWASP Dependency-Check, govulncheck, npm audit, pip-audit, Dependabot | High/Critical |
+| Уязвимости зависимостей | GitHub Dependency Review (граф зависимостей), Dependabot, govulncheck | High/Critical |
 | Анализ исходного кода | CodeQL, SpotBugs + find-sec-bugs, gosec, ruff `S` | High/Critical |
 | Секреты | Gitleaks | Любая находка |
 | Образы контейнеров | Trivy | High/Critical с доступным исправлением |

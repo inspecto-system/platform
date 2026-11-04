@@ -26,10 +26,10 @@
 | Unit-тесты | JUnit 5 | `go test -race` | JUnit 5 / MockK | Vitest + React Testing Library | pytest |
 | Интеграционные тесты | Testcontainers (PostgreSQL, MinIO) | testcontainers-go | Room in-memory, MockWebServer | Playwright (с CP5) | pytest + тестовая модель |
 | Покрытие | JaCoCo | `go test -cover` + проверка порога | Kover | Vitest coverage (v8) | pytest-cov |
-| Уязвимости зависимостей | OWASP Dependency-Check | govulncheck | OWASP Dependency-Check | `npm audit --audit-level=high` | pip-audit |
+| Уязвимости зависимостей | Dependency Review (граф зависимостей Gradle отправляется в GitHub) + Dependabot | Dependency Review + Dependabot, govulncheck | Dependency Review + Dependabot | Dependency Review + Dependabot | Dependency Review + Dependabot |
 | Безопасность кода | CodeQL | CodeQL, gosec | CodeQL | CodeQL | CodeQL, bandit (ruff `S`) |
 | Секреты | Gitleaks | Gitleaks | Gitleaks | Gitleaks | Gitleaks |
-| Контейнеры | Trivy (образ) | Trivy | — | Trivy | Trivy |
+| Контейнеры | Trivy (образ, с появлением Dockerfile) | Trivy | — | Trivy | Trivy |
 | Контракт API | Проверка ответов по OpenAPI в интеграционных тестах | То же | Генерация клиента из тегированной версии | То же | То же |
 
 Пересечения инструментов настраиваются так, чтобы одно нарушение не сообщалось несколькими анализаторами: стиль — только форматтер и Checkstyle/ktlint/ESLint; ошибки — PMD/SpotBugs/staticcheck/detekt.
@@ -38,7 +38,7 @@
 
 ## 3. Единые правила для всех репозиториев
 
-- Переиспользуемые workflow GitHub Actions лежат в `platform/.github/workflows/` (`workflow_call`) и подключаются из сервисных репозиториев одной строкой; общие конфигурации линтеров — в `platform/quality/`.
+- Переиспользуемые workflow GitHub Actions лежат в `platform/.github/workflows/` (`java-gradle.yml`, `go.yml`, `security.yml`; `workflow_call`) и подключаются из сервисных репозиториев одной строкой; общие конфигурации линтеров — в `platform/quality/` (см. `quality/README.md`).
 - Версии инструментов закреплены (не `latest`); действия GitHub Actions закреплены по SHA коммита.
 - Кеширование зависимостей (Gradle, Go modules, npm, pip) обязательно; запуск только по изменённым путям там, где это безопасно.
 - Защита ветки `main`: только через PR, обязательные проверки CI, запрет force push (ADR-021).

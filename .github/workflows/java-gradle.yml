@@ -1,0 +1,41 @@
+# Reusable workflow: build, static analysis and tests for a Java/Gradle service.
+# Runs `./gradlew build`, which in Inspecto services includes Spotless, Checkstyle, PMD,
+# SpotBugs, unit and integration tests (Testcontainers) and JaCoCo coverage verification.
+name: java-gradle
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: JDK version (Temurin).
+        type: string
+        default: "21"
+
+permissions:
+  contents: write # dependency graph submission
+
+jobs:
+  build:
+    name: Build, analyse, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+      - uses: gradle/actions/setup-gradle@7296c772c13d12d9871528814b51fb2143c138ef # v6.4.1
+        with:
+          dependency-graph: generate-and-submit
+      - name: Gradle build
+        run: ./gradlew build --no-daemon --stacktrace
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gradle-reports
+          path: |
+            build/reports/
+            build/test-results/
+          retention-days: 7
