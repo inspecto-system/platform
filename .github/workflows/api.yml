@@ -1,0 +1,30 @@
+name: api
+
+on:
+  push:
+    branches: [main]
+    paths: ["api/**", ".spectral.yaml", ".github/workflows/api.yml"]
+  pull_request:
+    paths: ["api/**", ".spectral.yaml", ".github/workflows/api.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: OpenAPI lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 22
+      - name: Spectral
+        run: npx --yes @stoplight/spectral-cli@6 lint "api/*.yaml" --fail-severity error
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+      - name: References and schemas
+        run: |
+          pip install pyyaml==6.0.2 jsonschema==4.23.0
+          python api/scripts/check_refs.py

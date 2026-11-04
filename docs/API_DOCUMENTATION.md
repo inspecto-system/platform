@@ -1,6 +1,6 @@
 # Документация API Inspecto
 
-> Статус: каталог API v0.1 (этап проектирования). Формальные спецификации OpenAPI 3.1 — `platform/api/*.yaml` (задача T-003). При расхождении источником истины является OpenAPI-спецификация, а этот документ обновляется в том же PR.
+> Статус: каталог API v0.1 (этап проектирования). Формальные спецификации OpenAPI 3.1 — [`api/*.yaml`](../api/) (версия контрактов 0.1.0). При расхождении источником истины является OpenAPI-спецификация, а этот документ обновляется в том же PR.
 
 ## 1. Общие правила
 
@@ -34,11 +34,12 @@
 | HTTP | Код | Когда |
 |---|---|---|
 | 400 | `VALIDATION_ERROR` | Нарушены правила полей |
-| 400 | `UNSUPPORTED_MEDIA_TYPE`, `IMAGE_TOO_LARGE`, `IMAGE_DIMENSIONS_TOO_LARGE`, `PHOTO_LIMIT_EXCEEDED` | Ошибки загрузки фото |
+| 400 | `UNSUPPORTED_MEDIA_TYPE`, `IMAGE_DIMENSIONS_TOO_LARGE`, `PHOTO_LIMIT_EXCEEDED` | Ошибки загрузки фото |
+| 413 | `IMAGE_TOO_LARGE` | Тело запроса больше лимита |
 | 401 | `UNAUTHENTICATED`, `TOKEN_EXPIRED`, `INVALID_CREDENTIALS` | Нет или недействителен токен, неверный логин/пароль |
 | 403 | `FORBIDDEN` | Роль не позволяет действие (например, INSPECTOR меняет системную категорию) |
 | 404 | `NOT_FOUND` | Ресурса нет **или он чужой** (ADR-009) |
-| 409 | `VERSION_CONFLICT`, `EMAIL_TAKEN`, `INVALID_STATE_TRANSITION` | Конфликт версий или состояния |
+| 409 | `VERSION_CONFLICT`, `EMAIL_TAKEN`, `INVALID_STATE_TRANSITION`, `REPORT_NOT_READY` | Конфликт версий или состояния; отчёт ещё не готов |
 | 423 | `ACCOUNT_LOCKED` | Временная блокировка после неудачных входов |
 | 429 | `RATE_LIMITED` | Превышен лимит запросов (заголовок `Retry-After`) |
 | 503 | `DEPENDENCY_UNAVAILABLE` | Недоступен зависимый сервис (media, report, ml) |
@@ -110,7 +111,7 @@
 | GET | `/defects/{id}` | Дефект с наблюдениями и фото |
 | PATCH | `/defects/{id}` | Категория, описание, серьёзность |
 | GET | `/defects/{id}/history` | История статусов |
-| GET | `/inspections/{id}/open-defects` | Открытые дефекты объекта для отметки при повторном осмотре |
+| GET | `/inspections/{id}/open-defects` | Дефекты, открытые до этого осмотра, с наблюдением в текущем осмотре (если уже сделано) |
 | POST | `/inspections/{id}/observations` | Наблюдение существующего дефекта `{defectId, status: OPEN\|RESOLVED, comment?, severity?}` |
 | PATCH | `/observations/{id}` | Изменение наблюдения |
 | POST | `/observations/{id}/photos` | Привязка загруженного фото `{photoId, caption?}` |
@@ -157,7 +158,7 @@
 | POST | `/reports` | `{inspectionId, locale?}` | `202 {id, status: "QUEUED"}` + `Location` |
 | GET | `/reports/{id}` | Статус задания | `200 {id, status, pageCount?, sizeBytes?, errorCode?}` |
 | GET | `/reports?inspectionId=` | Ранее сформированные отчёты осмотра | `200` список |
-| GET | `/reports/{id}/file` | PDF, `Content-Disposition: attachment` | `200 application/pdf`; не готов — `409` |
+| GET | `/reports/{id}/file` | PDF, `Content-Disposition: attachment` | `200 application/pdf`; не готов — `409 REPORT_NOT_READY` |
 
 Рекомендуемый интервал опроса статуса — 2 с, до 60 с.
 
