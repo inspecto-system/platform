@@ -14,7 +14,7 @@ flowchart TB
     end
     subgraph DATA["Сеть data (internal: true)"]
         PG[("PostgreSQL :5432 TLS")]
-        S3[("MinIO :9000")]
+        S3[("SeaweedFS :9000")]
     end
     subgraph RENDER["Сеть render (internal: true, без выхода в интернет)"]
         G["Gotenberg :3000"]

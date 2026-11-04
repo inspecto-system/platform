@@ -5,7 +5,7 @@ sequenceDiagram
     participant C as core-service
     participant M as media-service
     participant G as Gotenberg
-    participant S3 as MinIO
+    participant S3 as SeaweedFS
     participant DB as PostgreSQL (report)
     CL->>R: POST /api/v1/reports {inspectionId}
     R->>C: GET /internal/v1/access/properties/{id}?userId&action=read

@@ -4,7 +4,7 @@ sequenceDiagram
     participant A as Android
     participant WM as WorkManager
     participant M as media-service
-    participant S3 as MinIO
+    participant S3 as SeaweedFS
     participant C as core-service
     participant DB as PostgreSQL
     U->>A: Снимок дефекта (CameraX)
@@ -16,7 +16,7 @@ sequenceDiagram
     M->>M: Проверка сигнатуры, размера, числа пикселей,<br/>удаление EXIF, оригинал, превью, миниатюра
     alt Недопустимый файл
         M-->>WM: 400 UNSUPPORTED_MEDIA_TYPE / IMAGE_TOO_LARGE
-    else MinIO недоступен
+    else SeaweedFS недоступен
         M-->>WM: 503 DEPENDENCY_UNAVAILABLE → повтор с задержкой
     else Успех
         M->>S3: PUT photos/{propertyId}/{photoId}/{variant}

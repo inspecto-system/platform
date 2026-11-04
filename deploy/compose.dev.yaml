@@ -1,0 +1,137 @@
+# Development infrastructure for Inspecto: PostgreSQL (TLS, one database per service),
+# S3-compatible object storage (SeaweedFS) and Gotenberg (HTML -> PDF).
+# Services themselves run from the IDE during development and connect to the ports
+# published on 127.0.0.1 only.
+#
+#   cp deploy/.env.example deploy/.env      # then change the passwords
+#   docker compose -f deploy/compose.dev.yaml --env-file deploy/.env up -d --wait
+name: inspecto-dev
+
+services:
+  certs:
+    # One-shot job: self-signed TLS certificate for PostgreSQL (development only).
+    image: alpine:3.22
+    command:
+      - sh
+      - -ec
+      - |
+        if [ -f /certs/server.crt ]; then echo "certificate exists"; exit 0; fi
+        apk add --no-cache openssl >/dev/null
+        openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+          -subj "/CN=postgres" -addext "subjectAltName=DNS:postgres,DNS:localhost,IP:127.0.0.1" \
+          -keyout /certs/server.key -out /certs/server.crt
+        chown 70:70 /certs/server.key /certs/server.crt
+        chmod 600 /certs/server.key
+    volumes:
+      - pg-certs:/certs
+
+  postgres:
+    image: postgres:16-alpine
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in deploy/.env}
+      CORE_MIGRATOR_PASSWORD: ${CORE_MIGRATOR_PASSWORD:?}
+      CORE_APP_PASSWORD: ${CORE_APP_PASSWORD:?}
+      MEDIA_MIGRATOR_PASSWORD: ${MEDIA_MIGRATOR_PASSWORD:?}
+      MEDIA_APP_PASSWORD: ${MEDIA_APP_PASSWORD:?}
+      REPORT_MIGRATOR_PASSWORD: ${REPORT_MIGRATOR_PASSWORD:?}
+      REPORT_APP_PASSWORD: ${REPORT_APP_PASSWORD:?}
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/certs/server.crt
+      - -c
+      - ssl_key_file=/certs/server.key
+      - -c
+      - ssl_min_protocol_version=TLSv1.2
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+      - -c
+      - password_encryption=scram-sha-256
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - pg-certs:/certs:ro
+      - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  s3:
+    image: chrislusf/seaweedfs:4.52
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        /render-s3-config.sh > /tmp/s3.json
+        exec weed server -dir=/data -master.volumeSizeLimitMB=256 -volume.max=0 \
+          -s3 -s3.port=8333 -s3.config=/tmp/s3.json -ip.bind=0.0.0.0
+    environment:
+      S3_MEDIA_ACCESS_KEY: ${S3_MEDIA_ACCESS_KEY:?}
+      S3_MEDIA_SECRET_KEY: ${S3_MEDIA_SECRET_KEY:?}
+      S3_REPORT_ACCESS_KEY: ${S3_REPORT_ACCESS_KEY:?}
+      S3_REPORT_SECRET_KEY: ${S3_REPORT_SECRET_KEY:?}
+      S3_ADMIN_ACCESS_KEY: ${S3_ADMIN_ACCESS_KEY:?}
+      S3_ADMIN_SECRET_KEY: ${S3_ADMIN_SECRET_KEY:?}
+    volumes:
+      - s3-data:/data
+      - ./seaweedfs/render-s3-config.sh:/render-s3-config.sh:ro
+    ports:
+      - "127.0.0.1:8333:8333"
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9333/cluster/status && wget -q -S -O /dev/null http://127.0.0.1:8333/ 2>&1 | grep -q 'HTTP/'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  s3-init:
+    # One-shot job: creates the buckets (idempotent).
+    image: chrislusf/seaweedfs:4.52
+    depends_on:
+      s3:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        for bucket in photos reports; do
+          echo "s3.bucket.create -name $$bucket" | weed shell -master=s3:9333 || true
+        done
+        echo "s3.bucket.list" | weed shell -master=s3:9333
+    networks: [data]
+
+  gotenberg:
+    image: gotenberg/gotenberg:8.39.0
+    command:
+      - gotenberg
+      # Chromium may load only the files of the current conversion: no network access (SSRF, THREAT_MODEL T-12).
+      - --chromium-allow-list=^file:///tmp/.*
+      - --chromium-disable-javascript=true
+      - --api-timeout=60s
+      - --log-level=warn
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [render]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+networks:
+  data: {}
+  render: {}
+
+volumes:
+  pg-data: {}
+  pg-certs: {}
+  s3-data: {}

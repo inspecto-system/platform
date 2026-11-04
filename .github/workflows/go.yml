@@ -1,0 +1,52 @@
+# Reusable workflow: formatting, linting, vulnerability scan, build and tests for a Go service.
+# The service must contain a copy of platform/quality/go/.golangci.yml; drift is checked here.
+name: go
+
+on:
+  workflow_call:
+    inputs:
+      go-version-file:
+        description: Path to go.mod.
+        type: string
+        default: go.mod
+      coverage-threshold:
+        description: Minimum total statement coverage, percent.
+        type: number
+        default: 60
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Lint, test, scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: inspecto-system/platform
+          path: .platform
+          sparse-checkout: quality
+      - name: Shared lint config is up to date
+        run: diff -u .platform/quality/go/.golangci.yml .golangci.yml
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+      - uses: golangci/golangci-lint-action@d583c34f0599d37dbac4a198b9c83201be380893 # v9.3.0
+        with:
+          version: latest
+      - name: Build
+        run: go build ./...
+      - name: Test
+        run: go test -race -coverprofile=coverage.out ./...
+      - name: Coverage threshold
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub("%","",$3); print $3}')
+          echo "Total coverage: ${total}%"
+          awk -v t="$total" -v min="${{ inputs.coverage-threshold }}" 'BEGIN { exit (t + 0 < min + 0) }'
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
