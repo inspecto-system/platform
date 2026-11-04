@@ -24,7 +24,7 @@
 | Неиспользуемый код | PMD (`UnusedPrivateField`, `UnusedPrivateMethod`, `UnusedLocalVariable`), компилятор `-Xlint:all -Werror` | `unused` (U1000), `ineffassign`, `unparam` | detekt `UnusedPrivateMember`, Android Lint `UnusedResources` | ESLint `no-unused-vars`, `noUnusedLocals`, `noUnusedParameters` | ruff `F401`, `F841` |
 | Сборка | `./gradlew build` | `go build ./...` | `./gradlew assembleDebug` | `next build` | сборка образа |
 | Unit-тесты | JUnit 5 | `go test -race` | JUnit 5 / MockK | Vitest + React Testing Library | pytest |
-| Интеграционные тесты | Testcontainers (PostgreSQL, MinIO) | testcontainers-go | Room in-memory, MockWebServer | Playwright (с CP5) | pytest + тестовая модель |
+| Интеграционные тесты | Testcontainers (PostgreSQL, SeaweedFS) | testcontainers-go | Room in-memory, MockWebServer | Playwright (с CP5) | pytest + тестовая модель |
 | Покрытие | JaCoCo | `go test -cover` + проверка порога | Kover | Vitest coverage (v8) | pytest-cov |
 | Уязвимости зависимостей | Dependency Review (граф зависимостей Gradle отправляется в GitHub) + Dependabot | Dependency Review + Dependabot, govulncheck | Dependency Review + Dependabot | Dependency Review + Dependabot | Dependency Review + Dependabot |
 | Безопасность кода | CodeQL | CodeQL, gosec | CodeQL | CodeQL | CodeQL, bandit (ruff `S`) |
@@ -52,7 +52,7 @@
 - Для каждого внешнего endpoint — интеграционный тест: успех, валидация, `401`, доступ к чужому ресурсу (`404`).
 - Тесты независимы, детерминированы (фиксированное время через `Clock`, фиксированные seed), не зависят от порядка запуска и от сети.
 - Имена тестов описывают поведение: `shouldReturnNotFoundWhenPropertyBelongsToAnotherUser`.
-- Моки — только для внешних границ (HTTP-клиенты других сервисов, время); базы и MinIO — настоящие через Testcontainers.
+- Моки — только для внешних границ (HTTP-клиенты других сервисов, время); базы и SeaweedFS — настоящие через Testcontainers.
 - Сломанный тест не отключается: либо исправляется код, либо тест (с объяснением в PR).
 
 ## 5. Покрытие тестами

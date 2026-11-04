@@ -19,7 +19,7 @@ const PDF_OPTIONS = {
   format: 'A4',
   printBackground: true,
   displayHeaderFooter: true,
-  headerTemplate: `<div style="font-size:7.5pt;color:#5b6470;width:100%;padding:0 18mm 0 22mm;font-family:${FONT};display:flex;justify-content:space-between"><span>Inspecto · Архитектура информационной системы</span><span>Версия 0.1</span></div>`,
+  headerTemplate: `<div style="font-size:7.5pt;color:#5b6470;width:100%;padding:0 18mm 0 22mm;font-family:${FONT};display:flex;justify-content:space-between"><span>Inspecto · Архитектура информационной системы</span><span>Версия 0.2</span></div>`,
   footerTemplate: `<div style="font-size:8pt;color:#5b6470;width:100%;text-align:center;font-family:${FONT}">Стр. <span class="pageNumber"></span> из <span class="totalPages"></span></div>`,
   margin: { top: '22mm', bottom: '20mm', left: '22mm', right: '18mm' },
 };
