@@ -1,0 +1,108 @@
+openapi: 3.1.0
+info:
+  title: Inspecto ml-service API
+  version: 0.1.0
+  description: |
+    Defect category classification of a photo (ADR-016). Internal only: called by core-service
+    with a service token; never exposed through nginx.
+  license:
+    name: Proprietary (coursework project)
+    identifier: LicenseRef-Inspecto
+servers:
+  - url: http://ml-service:8084
+    description: Internal docker network
+security:
+  - serviceToken: []
+tags:
+  - name: internal
+
+paths:
+  /internal/v1/classify:
+    post:
+      tags: [internal]
+      operationId: classifyPhoto
+      summary: Top-3 defect categories for a photo
+      description: The service downloads the `preview` variant from media-service itself. core-service applies a 3 s timeout.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassifyRequest'
+      responses:
+        '200':
+          description: Predictions sorted by probability (descending).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClassifyResponse'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '503':
+          $ref: 'common.yaml#/components/responses/ServiceUnavailable'
+
+  /internal/v1/model:
+    get:
+      tags: [internal]
+      operationId: getModelInfo
+      summary: Loaded model version and classes
+      responses:
+        '200':
+          description: Model information.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelInfo'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+components:
+  schemas:
+    ClassifyRequest:
+      type: object
+      required: [photoId]
+      properties:
+        photoId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+      additionalProperties: false
+    Prediction:
+      type: object
+      required: [code, probability]
+      properties:
+        code:
+          type: string
+          description: System defect category code (see ML_DOCUMENTATION.md §3.5).
+          examples: [CRACK]
+        probability:
+          type: number
+          minimum: 0
+          maximum: 1
+    ClassifyResponse:
+      type: object
+      required: [modelVersion, predictions]
+      properties:
+        modelVersion:
+          type: string
+          examples: ['convnext-tiny-bd3-2026.12.01']
+        predictions:
+          type: array
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/Prediction'
+    ModelInfo:
+      type: object
+      required: [modelVersion, classes, inputSize]
+      properties:
+        modelVersion:
+          type: string
+        classes:
+          type: array
+          items:
+            type: string
+        inputSize:
+          type: integer
+          examples: [224]

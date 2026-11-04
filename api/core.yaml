@@ -1,0 +1,2350 @@
+openapi: 3.1.0
+info:
+  title: Inspecto core-service API
+  version: 0.1.0
+  description: |
+    Authentication, users, properties, rooms, dictionaries, inspections, checklists,
+    defects, observations, comparison, statistics and ML suggestions.
+    External paths are served behind nginx under `/api/v1`; `/internal/v1/**` paths are not
+    routed by nginx and accept only service tokens (ADR-007, ADR-013).
+    Human-readable catalogue: docs/API_DOCUMENTATION.md.
+  license:
+    name: Proprietary (coursework project)
+    identifier: LicenseRef-Inspecto
+servers:
+  - url: https://localhost/api/v1
+    description: Local docker compose through nginx
+security:
+  - bearerAuth: []
+tags:
+  - name: auth
+  - name: users
+  - name: properties
+  - name: rooms
+  - name: dictionaries
+  - name: inspections
+  - name: checklist
+  - name: defects
+  - name: comparison
+  - name: suggestions
+  - name: internal
+    description: Service-to-service endpoints (not exposed through nginx).
+
+paths:
+  /auth/register:
+    post:
+      tags: [auth]
+      operationId: register
+      summary: Register a new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+        '429':
+          $ref: 'common.yaml#/components/responses/TooManyRequests'
+
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Log in and obtain tokens
+      description: |
+        For `client: web` the refresh token is set as cookie
+        `refresh_token` (`HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth`) and is absent from the body.
+        For `client: android` it is returned in the body.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated.
+          headers:
+            Set-Cookie:
+              description: Refresh token cookie (web clients only).
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '423':
+          description: Account temporarily locked (`ACCOUNT_LOCKED`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/Problem'
+        '429':
+          $ref: 'common.yaml#/components/responses/TooManyRequests'
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshTokens
+      summary: Rotate the refresh token and issue a new access token
+      description: |
+        Web: refresh token from cookie and mandatory header `X-CSRF-Protection: 1`.
+        Android: refresh token in the body. Reuse of a revoked token revokes the whole token family.
+      security: []
+      parameters:
+        - name: X-CSRF-Protection
+          in: header
+          required: false
+          description: Required (value `1`) when the refresh token is sent as a cookie.
+          schema:
+            type: string
+            const: '1'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: New token pair.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: 'common.yaml#/components/responses/Forbidden'
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Revoke the current refresh token
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '204':
+          description: Logged out.
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+  /users/me:
+    get:
+      tags: [users]
+      operationId: getCurrentUser
+      summary: Current user profile
+      responses:
+        '200':
+          description: Profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+    patch:
+      tags: [users]
+      operationId: updateCurrentUser
+      summary: Update profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+    delete:
+      tags: [users]
+      operationId: deleteCurrentUser
+      summary: Delete the account and all its data
+      description: Data is deleted transactionally; files are removed asynchronously (ADR-018).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordConfirmation'
+      responses:
+        '202':
+          description: Account deleted; file clean-up scheduled.
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+  /users/me/password:
+    post:
+      tags: [users]
+      operationId: changePassword
+      summary: Change password and revoke all sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Password changed.
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+  /properties:
+    get:
+      tags: [properties]
+      operationId: listProperties
+      summary: List own properties
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/Page'
+        - $ref: 'common.yaml#/components/parameters/Size'
+        - name: archived
+          in: query
+          schema:
+            type: boolean
+            default: false
+        - name: query
+          in: query
+          description: Search by name or address.
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: Page of properties.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PropertyPage'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+    post:
+      tags: [properties]
+      operationId: createProperty
+      summary: Create a property
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePropertyRequest'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+  /properties/{propertyId}:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    get:
+      tags: [properties]
+      operationId: getProperty
+      summary: Property card
+      responses:
+        '200':
+          description: Property with rooms and counters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PropertyDetails'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    patch:
+      tags: [properties]
+      operationId: updateProperty
+      summary: Update a property
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePropertyRequest'
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+    delete:
+      tags: [properties]
+      operationId: deleteProperty
+      summary: Permanently delete a property with all its data
+      responses:
+        '202':
+          description: Deleted; file clean-up scheduled.
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /properties/{propertyId}/archive:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    post:
+      tags: [properties]
+      operationId: archiveProperty
+      summary: Archive a property
+      responses:
+        '200':
+          description: Archived.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /properties/{propertyId}/unarchive:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    post:
+      tags: [properties]
+      operationId: unarchiveProperty
+      summary: Restore an archived property
+      responses:
+        '200':
+          description: Restored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /properties/{propertyId}/rooms:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    get:
+      tags: [rooms]
+      operationId: listRooms
+      summary: Rooms of a property
+      responses:
+        '200':
+          description: Rooms ordered by `sortOrder`.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Room'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    post:
+      tags: [rooms]
+      operationId: createRoom
+      summary: Add a room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoomRequest'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /rooms/{roomId}:
+    parameters:
+      - $ref: '#/components/parameters/RoomId'
+    patch:
+      tags: [rooms]
+      operationId: updateRoom
+      summary: Update a room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRoomRequest'
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+    delete:
+      tags: [rooms]
+      operationId: deleteRoom
+      summary: Delete a room without defects
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /properties/{propertyId}/statistics:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    get:
+      tags: [comparison]
+      operationId: getPropertyStatistics
+      summary: Defect statistics of a property
+      responses:
+        '200':
+          description: Statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PropertyStatistics'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /defect-categories:
+    get:
+      tags: [dictionaries]
+      operationId: listDefectCategories
+      summary: System and own defect categories
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/AcceptLanguage'
+        - name: includeInactive
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Categories.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DefectCategory'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+    post:
+      tags: [dictionaries]
+      operationId: createOwnDefectCategory
+      summary: Create an own category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOwnCategoryRequest'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefectCategory'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+  /defect-categories/{categoryId}:
+    parameters:
+      - $ref: '#/components/parameters/CategoryId'
+    patch:
+      tags: [dictionaries]
+      operationId: updateOwnDefectCategory
+      summary: Rename or deactivate an own category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOwnCategoryRequest'
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefectCategory'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    delete:
+      tags: [dictionaries]
+      operationId: deleteOwnDefectCategory
+      summary: Delete an unused own category
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /admin/defect-categories:
+    post:
+      tags: [dictionaries]
+      operationId: createSystemDefectCategory
+      summary: Create a system category (ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSystemCategoryRequest'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefectCategory'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: 'common.yaml#/components/responses/Forbidden'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /admin/defect-categories/{categoryId}:
+    parameters:
+      - $ref: '#/components/parameters/CategoryId'
+    patch:
+      tags: [dictionaries]
+      operationId: updateSystemDefectCategory
+      summary: Update or deactivate a system category (ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSystemCategoryRequest'
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefectCategory'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: 'common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /checklist-templates:
+    get:
+      tags: [dictionaries]
+      operationId: listChecklistTemplates
+      summary: Checklist templates with items
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/AcceptLanguage'
+      responses:
+        '200':
+          description: Templates.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChecklistTemplate'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+  /dictionaries/severities:
+    get:
+      tags: [dictionaries]
+      operationId: listSeverities
+      summary: Severity scale with translations
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/AcceptLanguage'
+      responses:
+        '200':
+          description: Severity levels from least to most severe.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SeverityLevel'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+  /properties/{propertyId}/inspections:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    get:
+      tags: [inspections]
+      operationId: listInspections
+      summary: Inspection history of a property (newest first)
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/Page'
+        - $ref: 'common.yaml#/components/parameters/Size'
+      responses:
+        '200':
+          description: Page of inspections.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionPage'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    post:
+      tags: [inspections]
+      operationId: createInspection
+      summary: Create an inspection with its checklist
+      description: Checklist items are created for every selected room × every item of the selected templates in one transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInspectionRequest'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionDetails'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /inspections/{inspectionId}:
+    parameters:
+      - $ref: '#/components/parameters/InspectionId'
+    get:
+      tags: [inspections]
+      operationId: getInspection
+      summary: Inspection with checklist and observations
+      responses:
+        '200':
+          description: Inspection.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionDetails'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    patch:
+      tags: [inspections]
+      operationId: updateInspection
+      summary: Update title, date, notes or start the inspection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateInspectionRequest'
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inspection'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+    delete:
+      tags: [inspections]
+      operationId: deleteInspection
+      summary: Delete a draft inspection
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /inspections/{inspectionId}/complete:
+    parameters:
+      - $ref: '#/components/parameters/InspectionId'
+    post:
+      tags: [inspections]
+      operationId: completeInspection
+      summary: Complete the inspection (further changes are forbidden)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionOnly'
+      responses:
+        '200':
+          description: Completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Inspection'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /inspections/{inspectionId}/checklist-items:
+    parameters:
+      - $ref: '#/components/parameters/InspectionId'
+    post:
+      tags: [checklist]
+      operationId: addCustomChecklistItem
+      summary: Add a custom checklist item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChecklistItemRequest'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistItem'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /checklist-items/{checklistItemId}:
+    parameters:
+      - $ref: '#/components/parameters/ChecklistItemId'
+    patch:
+      tags: [checklist]
+      operationId: updateChecklistItem
+      summary: Set result and comment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateChecklistItemRequest'
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChecklistItem'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /properties/{propertyId}/defects:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    get:
+      tags: [defects]
+      operationId: listDefects
+      summary: Defects of a property
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/Page'
+        - $ref: 'common.yaml#/components/parameters/Size'
+        - name: status
+          in: query
+          schema:
+            $ref: 'common.yaml#/components/schemas/DefectStatus'
+        - name: roomId
+          in: query
+          schema:
+            $ref: 'common.yaml#/components/schemas/Uuid'
+        - name: severity
+          in: query
+          schema:
+            $ref: 'common.yaml#/components/schemas/Severity'
+      responses:
+        '200':
+          description: Page of defects.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefectPage'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /inspections/{inspectionId}/defects:
+    parameters:
+      - $ref: '#/components/parameters/InspectionId'
+    post:
+      tags: [defects]
+      operationId: createDefect
+      summary: Register a new defect with its first observation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDefectRequest'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefectDetails'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /defects/{defectId}:
+    parameters:
+      - $ref: '#/components/parameters/DefectId'
+    get:
+      tags: [defects]
+      operationId: getDefect
+      summary: Defect with observations and photos
+      responses:
+        '200':
+          description: Defect.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefectDetails'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+    patch:
+      tags: [defects]
+      operationId: updateDefect
+      summary: Update category, title, description or severity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDefectRequest'
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Defect'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /defects/{defectId}/history:
+    parameters:
+      - $ref: '#/components/parameters/DefectId'
+    get:
+      tags: [defects]
+      operationId: getDefectHistory
+      summary: Status history of a defect
+      responses:
+        '200':
+          description: History, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DefectStatusChange'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /inspections/{inspectionId}/open-defects:
+    parameters:
+      - $ref: '#/components/parameters/InspectionId'
+    get:
+      tags: [defects]
+      operationId: listOpenDefectsForInspection
+      summary: Defects open before this inspection, to be marked during a repeat inspection
+      responses:
+        '200':
+          description: Open defects with the observation in this inspection, if already made.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OpenDefect'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /inspections/{inspectionId}/observations:
+    parameters:
+      - $ref: '#/components/parameters/InspectionId'
+    post:
+      tags: [defects]
+      operationId: createObservation
+      summary: Record an existing defect in this inspection (still open or confirmed resolved)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateObservationRequest'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Observation'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /observations/{observationId}:
+    parameters:
+      - $ref: '#/components/parameters/ObservationId'
+    patch:
+      tags: [defects]
+      operationId: updateObservation
+      summary: Update an observation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateObservationRequest'
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Observation'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /observations/{observationId}/photos:
+    parameters:
+      - $ref: '#/components/parameters/ObservationId'
+    post:
+      tags: [defects]
+      operationId: attachPhoto
+      summary: Attach an uploaded photo to an observation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachPhotoRequest'
+      responses:
+        '201':
+          description: Attached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObservationPhoto'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+        '503':
+          $ref: 'common.yaml#/components/responses/ServiceUnavailable'
+
+  /observations/{observationId}/photos/{photoId}:
+    parameters:
+      - $ref: '#/components/parameters/ObservationId'
+      - $ref: '#/components/parameters/PhotoId'
+    delete:
+      tags: [defects]
+      operationId: detachPhoto
+      summary: Detach a photo (media-service removes it after 24 h)
+      responses:
+        '204':
+          description: Detached.
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /inspections/compare:
+    get:
+      tags: [comparison]
+      operationId: compareInspections
+      summary: Compare two inspections of the same property (ADR-004)
+      parameters:
+        - name: base
+          in: query
+          required: true
+          description: Earlier inspection (A).
+          schema:
+            $ref: 'common.yaml#/components/schemas/Uuid'
+        - name: target
+          in: query
+          required: true
+          description: Later inspection (B).
+          schema:
+            $ref: 'common.yaml#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Comparison.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InspectionComparison'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /category-suggestions:
+    post:
+      tags: [suggestions]
+      operationId: suggestCategories
+      summary: Suggest defect categories for a photo
+      description: Returns an empty list (not an error) when ml-service is unavailable or not confident.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuggestionRequest'
+      responses:
+        '200':
+          description: Suggestions (possibly empty).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestionResponse'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /.well-known/jwks.json:
+    get:
+      tags: [auth]
+      operationId: getJwks
+      summary: Public keys for JWT verification
+      security: []
+      responses:
+        '200':
+          description: JSON Web Key Set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Jwks'
+
+  /internal/v1/auth/service-token:
+    post:
+      tags: [internal]
+      operationId: issueServiceToken
+      summary: Issue a service token (client credentials)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ServiceTokenRequest'
+      responses:
+        '200':
+          description: Service token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceTokenResponse'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+  /internal/v1/access/properties/{propertyId}:
+    parameters:
+      - $ref: '#/components/parameters/PropertyId'
+    get:
+      tags: [internal]
+      operationId: checkPropertyAccess
+      summary: Check whether a user may read or write a property
+      security:
+        - serviceToken: []
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            $ref: 'common.yaml#/components/schemas/Uuid'
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [read, write]
+      responses:
+        '200':
+          description: Access allowed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessDecision'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /internal/v1/inspections/{inspectionId}/report-data:
+    parameters:
+      - $ref: '#/components/parameters/InspectionId'
+    get:
+      tags: [internal]
+      operationId: getReportData
+      summary: Inspection aggregate for the PDF report
+      security:
+        - serviceToken: []
+      parameters:
+        - name: locale
+          in: query
+          schema:
+            $ref: 'common.yaml#/components/schemas/Locale'
+      responses:
+        '200':
+          description: Report data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportData'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+components:
+  parameters:
+    PropertyId:
+      name: propertyId
+      in: path
+      required: true
+      schema:
+        $ref: 'common.yaml#/components/schemas/Uuid'
+    RoomId:
+      name: roomId
+      in: path
+      required: true
+      schema:
+        $ref: 'common.yaml#/components/schemas/Uuid'
+    CategoryId:
+      name: categoryId
+      in: path
+      required: true
+      schema:
+        $ref: 'common.yaml#/components/schemas/Uuid'
+    InspectionId:
+      name: inspectionId
+      in: path
+      required: true
+      schema:
+        $ref: 'common.yaml#/components/schemas/Uuid'
+    ChecklistItemId:
+      name: checklistItemId
+      in: path
+      required: true
+      schema:
+        $ref: 'common.yaml#/components/schemas/Uuid'
+    DefectId:
+      name: defectId
+      in: path
+      required: true
+      schema:
+        $ref: 'common.yaml#/components/schemas/Uuid'
+    ObservationId:
+      name: observationId
+      in: path
+      required: true
+      schema:
+        $ref: 'common.yaml#/components/schemas/Uuid'
+    PhotoId:
+      name: photoId
+      in: path
+      required: true
+      schema:
+        $ref: 'common.yaml#/components/schemas/Uuid'
+
+  schemas:
+    # ---------- auth & users ----------
+    Password:
+      type: string
+      format: password
+      minLength: 10
+      maxLength: 128
+      writeOnly: true
+    RegisterRequest:
+      type: object
+      required: [email, password, fullName]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          $ref: '#/components/schemas/Password'
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 200
+      additionalProperties: false
+    LoginRequest:
+      type: object
+      required: [email, password, client]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          maxLength: 128
+          writeOnly: true
+        client:
+          type: string
+          enum: [web, android]
+      additionalProperties: false
+    RefreshRequest:
+      type: object
+      description: Android only; web clients send the refresh token as a cookie and an empty body.
+      properties:
+        refreshToken:
+          type: string
+          maxLength: 512
+      additionalProperties: false
+    TokenResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          const: Bearer
+        expiresIn:
+          type: integer
+          description: Access token lifetime in seconds.
+          examples: [900]
+        refreshToken:
+          type: string
+          description: Present only when the client is android.
+    PasswordConfirmation:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          format: password
+          maxLength: 128
+          writeOnly: true
+      additionalProperties: false
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          format: password
+          maxLength: 128
+          writeOnly: true
+        newPassword:
+          $ref: '#/components/schemas/Password'
+      additionalProperties: false
+    User:
+      type: object
+      required: [id, email, fullName, role, locale, createdAt, version]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        role:
+          $ref: 'common.yaml#/components/schemas/Role'
+        locale:
+          $ref: 'common.yaml#/components/schemas/Locale'
+        createdAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+    UpdateUserRequest:
+      type: object
+      required: [version]
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        locale:
+          $ref: 'common.yaml#/components/schemas/Locale'
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+      additionalProperties: false
+
+    # ---------- properties & rooms ----------
+    PropertyFields:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        type:
+          $ref: 'common.yaml#/components/schemas/PropertyType'
+        address:
+          type: string
+          minLength: 1
+          maxLength: 500
+        city:
+          type: [string, 'null']
+          maxLength: 100
+        areaSqm:
+          type: [number, 'null']
+          minimum: 0
+          maximum: 100000
+        notes:
+          type: [string, 'null']
+          maxLength: 4000
+    CreatePropertyRequest:
+      allOf:
+        - $ref: '#/components/schemas/PropertyFields'
+      required: [name, type, address]
+      unevaluatedProperties: false
+    UpdatePropertyRequest:
+      allOf:
+        - $ref: '#/components/schemas/PropertyFields'
+        - type: object
+          required: [version]
+          properties:
+            version:
+              $ref: 'common.yaml#/components/schemas/Version'
+      unevaluatedProperties: false
+    Property:
+      allOf:
+        - $ref: '#/components/schemas/PropertyFields'
+        - type: object
+          required: [id, name, type, address, createdAt, updatedAt, version]
+          properties:
+            id:
+              $ref: 'common.yaml#/components/schemas/Uuid'
+            archivedAt:
+              oneOf:
+                - $ref: 'common.yaml#/components/schemas/Timestamp'
+                - type: 'null'
+            createdAt:
+              $ref: 'common.yaml#/components/schemas/Timestamp'
+            updatedAt:
+              $ref: 'common.yaml#/components/schemas/Timestamp'
+            version:
+              $ref: 'common.yaml#/components/schemas/Version'
+    PropertyDetails:
+      allOf:
+        - $ref: '#/components/schemas/Property'
+        - type: object
+          required: [rooms, inspectionCount, openDefectCount]
+          properties:
+            rooms:
+              type: array
+              items:
+                $ref: '#/components/schemas/Room'
+            inspectionCount:
+              type: integer
+              minimum: 0
+            openDefectCount:
+              type: integer
+              minimum: 0
+            lastInspectionAt:
+              oneOf:
+                - $ref: 'common.yaml#/components/schemas/Timestamp'
+                - type: 'null'
+    PropertyPage:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Property'
+    Room:
+      type: object
+      required: [id, propertyId, name, roomType, sortOrder, version]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        propertyId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        name:
+          type: string
+        roomType:
+          $ref: 'common.yaml#/components/schemas/RoomType'
+        sortOrder:
+          type: integer
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+    CreateRoomRequest:
+      type: object
+      required: [name, roomType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        roomType:
+          $ref: 'common.yaml#/components/schemas/RoomType'
+        sortOrder:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    UpdateRoomRequest:
+      type: object
+      required: [version]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        roomType:
+          $ref: 'common.yaml#/components/schemas/RoomType'
+        sortOrder:
+          type: integer
+          minimum: 0
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+      additionalProperties: false
+
+    # ---------- dictionaries ----------
+    DefectCategory:
+      type: object
+      required: [id, name, system, active]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        code:
+          type: [string, 'null']
+          description: Set for system categories; used by ML.
+          examples: [CRACK]
+        name:
+          type: string
+          description: Name in the requested locale.
+        names:
+          $ref: 'common.yaml#/components/schemas/LocalizedText'
+        system:
+          type: boolean
+        elementGroup:
+          oneOf:
+            - $ref: 'common.yaml#/components/schemas/ElementGroup'
+            - type: 'null'
+        active:
+          type: boolean
+    CreateOwnCategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        elementGroup:
+          $ref: 'common.yaml#/components/schemas/ElementGroup'
+      additionalProperties: false
+    UpdateOwnCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        active:
+          type: boolean
+      additionalProperties: false
+    CreateSystemCategoryRequest:
+      type: object
+      required: [code, names]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{1,49}$'
+        names:
+          $ref: 'common.yaml#/components/schemas/LocalizedText'
+        elementGroup:
+          $ref: 'common.yaml#/components/schemas/ElementGroup'
+      additionalProperties: false
+    UpdateSystemCategoryRequest:
+      type: object
+      properties:
+        names:
+          $ref: 'common.yaml#/components/schemas/LocalizedText'
+        elementGroup:
+          $ref: 'common.yaml#/components/schemas/ElementGroup'
+        active:
+          type: boolean
+      additionalProperties: false
+    ChecklistTemplate:
+      type: object
+      required: [id, code, name, items]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        code:
+          type: string
+          examples: [APARTMENT_STANDARD]
+        name:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChecklistTemplateItem'
+    ChecklistTemplateItem:
+      type: object
+      required: [id, elementGroup, title, sortOrder]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        elementGroup:
+          $ref: 'common.yaml#/components/schemas/ElementGroup'
+        title:
+          type: string
+        sortOrder:
+          type: integer
+    SeverityLevel:
+      type: object
+      required: [code, name, rank]
+      properties:
+        code:
+          $ref: 'common.yaml#/components/schemas/Severity'
+        name:
+          type: string
+        rank:
+          type: integer
+          minimum: 1
+          maximum: 4
+
+    # ---------- inspections & checklist ----------
+    Inspection:
+      type: object
+      required: [id, propertyId, inspectorId, inspectedAt, status, createdAt, updatedAt, version]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        propertyId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        inspectorId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        title:
+          type: [string, 'null']
+        inspectedAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        status:
+          $ref: 'common.yaml#/components/schemas/InspectionStatus'
+        notes:
+          type: [string, 'null']
+        completedAt:
+          oneOf:
+            - $ref: 'common.yaml#/components/schemas/Timestamp'
+            - type: 'null'
+        createdAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+    InspectionSummary:
+      allOf:
+        - $ref: '#/components/schemas/Inspection'
+        - type: object
+          required: [defectCount, newDefectCount]
+          properties:
+            defectCount:
+              type: integer
+              minimum: 0
+              description: Observations with status OPEN in this inspection.
+            newDefectCount:
+              type: integer
+              minimum: 0
+    InspectionPage:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/InspectionSummary'
+    InspectionDetails:
+      allOf:
+        - $ref: '#/components/schemas/Inspection'
+        - type: object
+          required: [rooms]
+          properties:
+            rooms:
+              type: array
+              description: Checklist grouped by room.
+              items:
+                $ref: '#/components/schemas/InspectionRoom'
+    InspectionRoom:
+      type: object
+      required: [room, checklist, observations]
+      properties:
+        room:
+          $ref: '#/components/schemas/Room'
+        checklist:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChecklistItem'
+        observations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ObservationWithDefect'
+    CreateInspectionRequest:
+      type: object
+      required: [inspectedAt, roomIds, templateCodes]
+      properties:
+        inspectedAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        title:
+          type: string
+          maxLength: 200
+        notes:
+          type: string
+          maxLength: 4000
+        roomIds:
+          type: array
+          minItems: 1
+          maxItems: 50
+          uniqueItems: true
+          items:
+            $ref: 'common.yaml#/components/schemas/Uuid'
+        templateCodes:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+      additionalProperties: false
+    UpdateInspectionRequest:
+      type: object
+      required: [version]
+      properties:
+        title:
+          type: [string, 'null']
+          maxLength: 200
+        inspectedAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        notes:
+          type: [string, 'null']
+          maxLength: 4000
+        status:
+          description: Only the transition DRAFT → IN_PROGRESS is allowed here; completion uses /complete.
+          type: string
+          const: IN_PROGRESS
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+      additionalProperties: false
+    VersionOnly:
+      type: object
+      required: [version]
+      properties:
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+      additionalProperties: false
+    ChecklistItem:
+      type: object
+      required: [id, inspectionId, roomId, elementGroup, title, result, custom, sortOrder, version]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        inspectionId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        roomId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        templateItemId:
+          oneOf:
+            - $ref: 'common.yaml#/components/schemas/Uuid'
+            - type: 'null'
+        elementGroup:
+          $ref: 'common.yaml#/components/schemas/ElementGroup'
+        title:
+          type: string
+        result:
+          $ref: 'common.yaml#/components/schemas/ChecklistResult'
+        comment:
+          type: [string, 'null']
+        custom:
+          type: boolean
+        sortOrder:
+          type: integer
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+    CreateChecklistItemRequest:
+      type: object
+      required: [roomId, elementGroup, title]
+      properties:
+        roomId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        elementGroup:
+          $ref: 'common.yaml#/components/schemas/ElementGroup'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+      additionalProperties: false
+    UpdateChecklistItemRequest:
+      type: object
+      required: [version]
+      properties:
+        result:
+          $ref: 'common.yaml#/components/schemas/ChecklistResult'
+        comment:
+          type: [string, 'null']
+          maxLength: 2000
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+      additionalProperties: false
+
+    # ---------- defects & observations ----------
+    Defect:
+      type: object
+      required: [id, propertyId, roomId, categoryId, elementGroup, title, severity, currentStatus, firstInspectionId, createdAt, updatedAt, version]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        propertyId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        roomId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        categoryId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        elementGroup:
+          $ref: 'common.yaml#/components/schemas/ElementGroup'
+        title:
+          type: string
+        description:
+          type: [string, 'null']
+        severity:
+          $ref: 'common.yaml#/components/schemas/Severity'
+        currentStatus:
+          $ref: 'common.yaml#/components/schemas/DefectStatus'
+        firstInspectionId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        createdAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        updatedAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+    DefectPage:
+      allOf:
+        - $ref: 'common.yaml#/components/schemas/PageMeta'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/Defect'
+    DefectDetails:
+      allOf:
+        - $ref: '#/components/schemas/Defect'
+        - type: object
+          required: [observations]
+          properties:
+            observations:
+              type: array
+              description: Observations, newest first.
+              items:
+                $ref: '#/components/schemas/Observation'
+    OpenDefect:
+      type: object
+      required: [defect]
+      properties:
+        defect:
+          $ref: '#/components/schemas/Defect'
+        lastObservation:
+          $ref: '#/components/schemas/Observation'
+        currentObservation:
+          description: Observation in the requested inspection, if already recorded.
+          oneOf:
+            - $ref: '#/components/schemas/Observation'
+            - type: 'null'
+    CreateDefectRequest:
+      type: object
+      required: [roomId, categoryId, elementGroup, title, severity]
+      properties:
+        roomId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        checklistItemId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        categoryId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        elementGroup:
+          $ref: 'common.yaml#/components/schemas/ElementGroup'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 4000
+        severity:
+          $ref: 'common.yaml#/components/schemas/Severity'
+        comment:
+          type: string
+          maxLength: 2000
+        suggestionId:
+          description: ML suggestion used for this defect; records the user's decision.
+          $ref: 'common.yaml#/components/schemas/Uuid'
+      additionalProperties: false
+    UpdateDefectRequest:
+      type: object
+      required: [version]
+      properties:
+        categoryId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: [string, 'null']
+          maxLength: 4000
+        severity:
+          $ref: 'common.yaml#/components/schemas/Severity'
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+      additionalProperties: false
+    Observation:
+      type: object
+      required: [id, defectId, inspectionId, status, severity, observedBy, photos, createdAt, version]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        defectId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        inspectionId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        checklistItemId:
+          oneOf:
+            - $ref: 'common.yaml#/components/schemas/Uuid'
+            - type: 'null'
+        status:
+          $ref: 'common.yaml#/components/schemas/ObservationStatus'
+        severity:
+          $ref: 'common.yaml#/components/schemas/Severity'
+        comment:
+          type: [string, 'null']
+        observedBy:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/ObservationPhoto'
+        createdAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+    ObservationWithDefect:
+      allOf:
+        - $ref: '#/components/schemas/Observation'
+        - type: object
+          required: [defect]
+          properties:
+            defect:
+              $ref: '#/components/schemas/Defect'
+    CreateObservationRequest:
+      type: object
+      required: [defectId, status]
+      properties:
+        defectId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        status:
+          $ref: 'common.yaml#/components/schemas/ObservationStatus'
+        severity:
+          $ref: 'common.yaml#/components/schemas/Severity'
+        checklistItemId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        comment:
+          type: string
+          maxLength: 2000
+      additionalProperties: false
+    UpdateObservationRequest:
+      type: object
+      required: [version]
+      properties:
+        status:
+          $ref: 'common.yaml#/components/schemas/ObservationStatus'
+        severity:
+          $ref: 'common.yaml#/components/schemas/Severity'
+        comment:
+          type: [string, 'null']
+          maxLength: 2000
+        version:
+          $ref: 'common.yaml#/components/schemas/Version'
+      additionalProperties: false
+    ObservationPhoto:
+      type: object
+      required: [photoId, sortOrder]
+      properties:
+        photoId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        caption:
+          type: [string, 'null']
+        sortOrder:
+          type: integer
+    AttachPhotoRequest:
+      type: object
+      required: [photoId]
+      properties:
+        photoId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        caption:
+          type: string
+          maxLength: 200
+      additionalProperties: false
+    DefectStatusChange:
+      type: object
+      required: [toStatus, changedBy, changedAt]
+      properties:
+        fromStatus:
+          oneOf:
+            - $ref: 'common.yaml#/components/schemas/DefectStatus'
+            - type: 'null'
+        toStatus:
+          $ref: 'common.yaml#/components/schemas/DefectStatus'
+        inspectionId:
+          oneOf:
+            - $ref: 'common.yaml#/components/schemas/Uuid'
+            - type: 'null'
+        changedBy:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        changedAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        comment:
+          type: [string, 'null']
+
+    # ---------- comparison & statistics ----------
+    StateCounts:
+      type: object
+      required: [new, resolved, remaining, notChecked]
+      properties:
+        new:
+          type: integer
+          minimum: 0
+        resolved:
+          type: integer
+          minimum: 0
+        remaining:
+          type: integer
+          minimum: 0
+        notChecked:
+          type: integer
+          minimum: 0
+    ComparedInspection:
+      type: object
+      required: [id, inspectedAt]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        inspectedAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+    ComparedDefect:
+      type: object
+      required: [defectId, state, title, severity, roomId, roomName, categoryId]
+      properties:
+        defectId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        state:
+          $ref: 'common.yaml#/components/schemas/ComparisonState'
+        reopened:
+          type: boolean
+          default: false
+          description: NEW defect that was RESOLVED in the base inspection.
+        title:
+          type: string
+        severity:
+          $ref: 'common.yaml#/components/schemas/Severity'
+        roomId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        roomName:
+          type: string
+        categoryId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+    CategoryStateCounts:
+      allOf:
+        - $ref: '#/components/schemas/StateCounts'
+        - type: object
+          required: [categoryId, categoryName]
+          properties:
+            categoryId:
+              $ref: 'common.yaml#/components/schemas/Uuid'
+            categoryName:
+              type: string
+    InspectionComparison:
+      type: object
+      required: [base, target, summary, defects, bySeverity, byCategory]
+      properties:
+        base:
+          $ref: '#/components/schemas/ComparedInspection'
+        target:
+          $ref: '#/components/schemas/ComparedInspection'
+        summary:
+          $ref: '#/components/schemas/StateCounts'
+        defects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComparedDefect'
+        bySeverity:
+          type: object
+          propertyNames:
+            $ref: 'common.yaml#/components/schemas/Severity'
+          additionalProperties:
+            $ref: '#/components/schemas/StateCounts'
+        byCategory:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryStateCounts'
+    CountByKey:
+      type: object
+      required: [key, count]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        count:
+          type: integer
+          minimum: 0
+    PropertyStatistics:
+      type: object
+      required: [totalDefects, openDefects, resolvedDefects, bySeverity, byCategory, byRoom, byInspection]
+      properties:
+        totalDefects:
+          type: integer
+          minimum: 0
+        openDefects:
+          type: integer
+          minimum: 0
+        resolvedDefects:
+          type: integer
+          minimum: 0
+        bySeverity:
+          type: array
+          items:
+            $ref: '#/components/schemas/CountByKey'
+        byCategory:
+          type: array
+          items:
+            $ref: '#/components/schemas/CountByKey'
+        byRoom:
+          type: array
+          items:
+            $ref: '#/components/schemas/CountByKey'
+        byInspection:
+          type: array
+          description: Open defects per inspection, chronological.
+          items:
+            type: object
+            required: [inspectionId, inspectedAt, openDefects, newDefects, resolvedDefects]
+            properties:
+              inspectionId:
+                $ref: 'common.yaml#/components/schemas/Uuid'
+              inspectedAt:
+                $ref: 'common.yaml#/components/schemas/Timestamp'
+              openDefects:
+                type: integer
+              newDefects:
+                type: integer
+              resolvedDefects:
+                type: integer
+
+    # ---------- ML suggestions ----------
+    SuggestionRequest:
+      type: object
+      required: [photoId]
+      properties:
+        photoId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+      additionalProperties: false
+    SuggestionItem:
+      type: object
+      required: [categoryId, code, name, probability]
+      properties:
+        categoryId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        code:
+          type: string
+        name:
+          type: string
+        probability:
+          type: number
+          minimum: 0
+          maximum: 1
+    SuggestionResponse:
+      type: object
+      required: [items]
+      properties:
+        suggestionId:
+          description: Absent when no suggestion is available.
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        modelVersion:
+          type: string
+        items:
+          type: array
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/SuggestionItem'
+
+    # ---------- internal ----------
+    Jwks:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            required: [kty, kid, use, alg, n, e]
+            properties:
+              kty:
+                type: string
+                const: RSA
+              kid:
+                type: string
+              use:
+                type: string
+                const: sig
+              alg:
+                type: string
+                const: RS256
+              n:
+                type: string
+              e:
+                type: string
+    ServiceTokenRequest:
+      type: object
+      required: [grant_type, client_id, client_secret]
+      properties:
+        grant_type:
+          type: string
+          const: client_credentials
+        client_id:
+          type: string
+          enum: [media-service, report-service, ml-service]
+        client_secret:
+          type: string
+          writeOnly: true
+    ServiceTokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          const: Bearer
+        expires_in:
+          type: integer
+    AccessDecision:
+      type: object
+      required: [allowed]
+      properties:
+        allowed:
+          type: boolean
+          const: true
+    ReportData:
+      type: object
+      description: Everything report-service needs to render one inspection report.
+      required: [property, inspection, inspector, rooms, summary, generatedAt]
+      properties:
+        property:
+          $ref: '#/components/schemas/Property'
+        inspection:
+          $ref: '#/components/schemas/Inspection'
+        inspector:
+          type: object
+          required: [fullName]
+          properties:
+            fullName:
+              type: string
+        rooms:
+          type: array
+          items:
+            type: object
+            required: [room, checklist, defects]
+            properties:
+              room:
+                $ref: '#/components/schemas/Room'
+              checklist:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChecklistItem'
+              defects:
+                type: array
+                items:
+                  type: object
+                  required: [defect, categoryName, observation]
+                  properties:
+                    defect:
+                      $ref: '#/components/schemas/Defect'
+                    categoryName:
+                      type: string
+                    observation:
+                      $ref: '#/components/schemas/Observation'
+        summary:
+          type: object
+          required: [bySeverity, total]
+          properties:
+            total:
+              type: integer
+            bySeverity:
+              type: object
+              propertyNames:
+                $ref: 'common.yaml#/components/schemas/Severity'
+              additionalProperties:
+                type: integer
+        comparison:
+          description: Present for a repeat inspection — comparison with the previous inspection.
+          oneOf:
+            - $ref: '#/components/schemas/InspectionComparison'
+            - type: 'null'
+        generatedAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'

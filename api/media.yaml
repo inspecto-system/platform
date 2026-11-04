@@ -1,0 +1,294 @@
+openapi: 3.1.0
+info:
+  title: Inspecto media-service API
+  version: 0.1.0
+  description: |
+    Upload, validation, compression, storage and delivery of photos (ADR-006).
+    External paths are served behind nginx under `/api/v1/photos`; `/internal/v1/**` accepts only service tokens.
+  license:
+    name: Proprietary (coursework project)
+    identifier: LicenseRef-Inspecto
+servers:
+  - url: https://localhost/api/v1
+    description: Local docker compose through nginx
+security:
+  - bearerAuth: []
+tags:
+  - name: photos
+  - name: internal
+    description: Service-to-service endpoints (not exposed through nginx).
+
+paths:
+  /photos/limits:
+    get:
+      tags: [photos]
+      operationId: getPhotoLimits
+      summary: Upload limits (configured in media-service)
+      responses:
+        '200':
+          description: Limits.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoLimits'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+  /photos:
+    post:
+      tags: [photos]
+      operationId: uploadPhoto
+      summary: Upload a photo
+      description: |
+        The type is checked by file signature, dimensions are checked before decoding,
+        EXIF metadata is removed and three variants are stored. The photo must be attached to an
+        observation through core-service within 24 hours, otherwise it is deleted.
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UploadPhotoRequest'
+            encoding:
+              file:
+                contentType: image/jpeg, image/png, image/webp
+      responses:
+        '201':
+          description: Uploaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Photo'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '413':
+          description: Request body exceeds the limit (`IMAGE_TOO_LARGE`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: 'common.yaml#/components/schemas/Problem'
+        '429':
+          $ref: 'common.yaml#/components/responses/TooManyRequests'
+        '503':
+          $ref: 'common.yaml#/components/responses/ServiceUnavailable'
+
+  /photos/{photoId}/content:
+    parameters:
+      - $ref: '#/components/parameters/PhotoId'
+    get:
+      tags: [photos]
+      operationId: getPhotoContent
+      summary: Download a photo variant
+      parameters:
+        - name: variant
+          in: query
+          schema:
+            $ref: 'common.yaml#/components/schemas/PhotoVariant'
+      responses:
+        '200':
+          description: 'Image bytes, served with Cache-Control: private.'
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                contentMediaType: image/jpeg
+            image/png:
+              schema:
+                type: string
+                contentMediaType: image/png
+            image/webp:
+              schema:
+                type: string
+                contentMediaType: image/webp
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '503':
+          $ref: 'common.yaml#/components/responses/ServiceUnavailable'
+
+  /photos/{photoId}:
+    parameters:
+      - $ref: '#/components/parameters/PhotoId'
+    delete:
+      tags: [photos]
+      operationId: deletePhoto
+      summary: Delete an unattached photo
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /internal/v1/photos/{photoId}:
+    parameters:
+      - $ref: '#/components/parameters/PhotoId'
+    get:
+      tags: [internal]
+      operationId: getPhotoMetadata
+      summary: Photo metadata (owner, property, status)
+      security:
+        - serviceToken: []
+      responses:
+        '200':
+          description: Metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoMetadata'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /internal/v1/photos/{photoId}/attach:
+    parameters:
+      - $ref: '#/components/parameters/PhotoId'
+    post:
+      tags: [internal]
+      operationId: markPhotoAttached
+      summary: Mark a photo as attached (idempotent)
+      security:
+        - serviceToken: []
+      responses:
+        '204':
+          description: Attached.
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /internal/v1/photos/{photoId}/content:
+    parameters:
+      - $ref: '#/components/parameters/PhotoId'
+    get:
+      tags: [internal]
+      operationId: getPhotoContentInternal
+      summary: Photo bytes for report-service and ml-service
+      security:
+        - serviceToken: []
+      parameters:
+        - name: variant
+          in: query
+          schema:
+            $ref: 'common.yaml#/components/schemas/PhotoVariant'
+      responses:
+        '200':
+          description: Image bytes.
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                contentMediaType: image/jpeg
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /internal/v1/photos:
+    delete:
+      tags: [internal]
+      operationId: deletePhotosInBulk
+      summary: Delete all photos of a property or an owner (idempotent)
+      description: Exactly one of `propertyId` or `ownerId` must be given.
+      security:
+        - serviceToken: []
+      parameters:
+        - name: propertyId
+          in: query
+          schema:
+            $ref: 'common.yaml#/components/schemas/Uuid'
+        - name: ownerId
+          in: query
+          schema:
+            $ref: 'common.yaml#/components/schemas/Uuid'
+      responses:
+        '204':
+          description: Deleted (or nothing to delete).
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+components:
+  parameters:
+    PhotoId:
+      name: photoId
+      in: path
+      required: true
+      schema:
+        $ref: 'common.yaml#/components/schemas/Uuid'
+  schemas:
+    PhotoLimits:
+      type: object
+      required: [allowedContentTypes, maxFileSizeBytes, maxPixels, maxPhotosPerObservation]
+      properties:
+        allowedContentTypes:
+          type: array
+          items:
+            type: string
+            enum: [image/jpeg, image/png, image/webp]
+        maxFileSizeBytes:
+          type: integer
+          format: int64
+          examples: [15728640]
+        maxPixels:
+          type: integer
+          format: int64
+          examples: [50000000]
+        maxPhotosPerObservation:
+          type: integer
+          examples: [10]
+    UploadPhotoRequest:
+      type: object
+      required: [file, propertyId]
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          description: JPEG, PNG or WebP image.
+        propertyId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+    Photo:
+      type: object
+      required: [id, propertyId, contentType, width, height, sizeBytes, createdAt]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        propertyId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        contentType:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        sizeBytes:
+          type: integer
+          format: int64
+        createdAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+    PhotoMetadata:
+      allOf:
+        - $ref: '#/components/schemas/Photo'
+        - type: object
+          required: [ownerId, status]
+          properties:
+            ownerId:
+              $ref: 'common.yaml#/components/schemas/Uuid'
+            status:
+              type: string
+              enum: [UPLOADED, ATTACHED]
+            sha256:
+              type: string
+              pattern: '^[a-f0-9]{64}$'

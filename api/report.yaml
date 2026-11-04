@@ -1,0 +1,194 @@
+openapi: 3.1.0
+info:
+  title: Inspecto report-service API
+  version: 0.1.0
+  description: |
+    Asynchronous PDF report generation (ADR-011, ADR-012).
+    External paths are served behind nginx under `/api/v1/reports`; `/internal/v1/**` accepts only service tokens.
+  license:
+    name: Proprietary (coursework project)
+    identifier: LicenseRef-Inspecto
+servers:
+  - url: https://localhost/api/v1
+    description: Local docker compose through nginx
+security:
+  - bearerAuth: []
+tags:
+  - name: reports
+  - name: internal
+    description: Service-to-service endpoints (not exposed through nginx).
+
+paths:
+  /reports:
+    post:
+      tags: [reports]
+      operationId: requestReport
+      summary: Request a PDF report for an inspection
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReportRequest'
+      responses:
+        '202':
+          description: Job accepted. Poll `GET /reports/{reportId}` every 2 s (up to 60 s).
+          headers:
+            Location:
+              description: URL of the job.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportJob'
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '429':
+          $ref: 'common.yaml#/components/responses/TooManyRequests'
+        '503':
+          $ref: 'common.yaml#/components/responses/ServiceUnavailable'
+    get:
+      tags: [reports]
+      operationId: listReports
+      summary: Reports previously generated for an inspection
+      parameters:
+        - name: inspectionId
+          in: query
+          required: true
+          schema:
+            $ref: 'common.yaml#/components/schemas/Uuid'
+      responses:
+        '200':
+          description: Jobs, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReportJob'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /reports/{reportId}:
+    parameters:
+      - $ref: '#/components/parameters/ReportId'
+    get:
+      tags: [reports]
+      operationId: getReport
+      summary: Report job status
+      responses:
+        '200':
+          description: Job.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportJob'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+
+  /reports/{reportId}/file:
+    parameters:
+      - $ref: '#/components/parameters/ReportId'
+    get:
+      tags: [reports]
+      operationId: downloadReport
+      summary: Download the PDF
+      responses:
+        '200':
+          description: 'PDF, served with Content-Disposition: attachment.'
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+          content:
+            application/pdf:
+              schema:
+                type: string
+                contentMediaType: application/pdf
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '404':
+          $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
+
+  /internal/v1/reports:
+    delete:
+      tags: [internal]
+      operationId: deleteReportsInBulk
+      summary: Delete all reports of a property or of a requesting user (idempotent)
+      description: Exactly one of `propertyId` or `requestedBy` must be given.
+      security:
+        - serviceToken: []
+      parameters:
+        - name: propertyId
+          in: query
+          schema:
+            $ref: 'common.yaml#/components/schemas/Uuid'
+        - name: requestedBy
+          in: query
+          schema:
+            $ref: 'common.yaml#/components/schemas/Uuid'
+      responses:
+        '204':
+          description: Deleted (or nothing to delete).
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+
+components:
+  parameters:
+    ReportId:
+      name: reportId
+      in: path
+      required: true
+      schema:
+        $ref: 'common.yaml#/components/schemas/Uuid'
+  schemas:
+    CreateReportRequest:
+      type: object
+      required: [inspectionId]
+      properties:
+        inspectionId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        locale:
+          $ref: 'common.yaml#/components/schemas/Locale'
+      additionalProperties: false
+    ReportJob:
+      type: object
+      required: [id, inspectionId, status, locale, createdAt]
+      properties:
+        id:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        inspectionId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        status:
+          $ref: 'common.yaml#/components/schemas/ReportStatus'
+        locale:
+          $ref: 'common.yaml#/components/schemas/Locale'
+        pageCount:
+          type: [integer, 'null']
+        sizeBytes:
+          type: [integer, 'null']
+          format: int64
+        errorCode:
+          type: [string, 'null']
+          description: Set when status is FAILED (for example DEPENDENCY_UNAVAILABLE, RENDER_FAILED, REPORT_TOO_LARGE).
+        createdAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        finishedAt:
+          oneOf:
+            - $ref: 'common.yaml#/components/schemas/Timestamp'
+            - type: 'null'
