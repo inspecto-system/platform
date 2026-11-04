@@ -17,3 +17,5 @@
 | `.github/workflows/security.yml` | Gitleaks, Dependency Review, CodeQL | `uses: inspecto-system/platform/.github/workflows/security.yml@main` |
 
 Workflow для Android, Web и Python добавляются вместе с каркасами этих компонентов (T-304, T-501, T-601).
+
+Вызывающий workflow должен выдать права не меньше тех, что запрашивает переиспользуемый: `contents: write` для `java-gradle.yml` (отправка графа зависимостей), `security-events: write` для `security.yml` (CodeQL), иначе запуск завершается ошибкой `startup_failure`.
