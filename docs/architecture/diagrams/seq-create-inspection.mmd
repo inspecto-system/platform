@@ -1,0 +1,33 @@
+sequenceDiagram
+    autonumber
+    actor U as Инспектор
+    participant A as Android
+    participant RM as Room (локально)
+    participant N as nginx
+    participant C as core-service
+    participant DB as PostgreSQL (core)
+    U->>A: Новый осмотр: дата, помещения, шаблоны
+    A->>RM: Сохранение черновика
+    A->>N: POST /api/v1/properties/{id}/inspections<br/>{inspectedAt, roomIds[], templateCodes[]}
+    N->>C: Bearer JWT
+    C->>C: Проверка подписи и роли
+    C->>DB: Проверка владения объектом
+    alt Чужой или несуществующий объект
+        C-->>A: 404 NOT_FOUND
+    else Ошибка валидации
+        C-->>A: 400 VALIDATION_ERROR {errors[]}
+    else Успех
+        C->>DB: BEGIN, INSERT inspections (DRAFT),<br/>INSERT inspection_checklist_items (помещения × пункты шаблонов), COMMIT
+        C-->>A: 201 {inspection, checklist по помещениям}
+        A->>RM: Замена черновика серверной версией
+    end
+    opt Нет сети
+        A-->>U: Осмотр сохранён как черновик, будет отправлен при подключении
+    end
+    U->>A: Отметка пункта (OK / Дефект / Неприменимо)
+    A->>C: PATCH /api/v1/checklist-items/{id} {result, version}
+    alt Версия устарела
+        C-->>A: 409 VERSION_CONFLICT
+    else
+        C-->>A: 200 пункт
+    end

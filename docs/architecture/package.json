@@ -1,0 +1,13 @@
+{
+  "name": "inspecto-architecture-doc",
+  "private": true,
+  "type": "module",
+  "description": "Build tooling for INSPECTO_SYSTEM_ARCHITECTURE.pdf",
+  "scripts": {
+    "build": "./build.sh"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.4.0",
+    "puppeteer": "^23.0.0"
+  }
+}

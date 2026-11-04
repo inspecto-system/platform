@@ -1,0 +1,27 @@
+sequenceDiagram
+    autonumber
+    actor U as Пользователь
+    participant CL as Клиент (Web / Android)
+    participant N as nginx
+    participant C as core-service
+    participant DB as PostgreSQL (core)
+    U->>CL: Email и пароль
+    CL->>N: POST /api/v1/auth/login {email, password, client}
+    N->>C: проксирование (rate limit 5/мин на IP)
+    C->>DB: SELECT users WHERE lower(email)=…
+    alt Неверный пароль
+        C->>DB: failed_login_attempts += 1 (блокировка после 5)
+        C-->>CL: 401 INVALID_CREDENTIALS
+    else Успех
+        C->>DB: INSERT refresh_tokens (hash, family_id)
+        C-->>CL: 200 {accessToken JWT RS256 15 мин}<br/>Web: refresh в cookie HttpOnly, Android: refresh в теле
+    end
+    Note over CL,C: Через 15 минут access-токен истекает
+    CL->>C: POST /api/v1/auth/refresh (cookie + X-CSRF-Protection | {refreshToken})
+    C->>DB: Проверка hash, отзыв старого, INSERT нового (ротация)
+    alt Токен уже был использован
+        C->>DB: Отзыв всего семейства
+        C-->>CL: 401 UNAUTHENTICATED (повторный вход)
+    else
+        C-->>CL: 200 новая пара токенов
+    end

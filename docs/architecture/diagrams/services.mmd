@@ -1,0 +1,21 @@
+flowchart TB
+    classDef java fill:#FDEBD8,stroke:#C25E00,color:#3D1E00
+    classDef go fill:#DDF4F7,stroke:#00838F,color:#00363A
+    classDef py fill:#FFF6D6,stroke:#B38600,color:#3D2E00
+    classDef store fill:#EDEDED,stroke:#555555,color:#1A1A1A
+
+    M["media-service<br/>(Go)"]:::go
+    C["core-service<br/>(Java)"]:::java
+    R["report-service<br/>(Go)"]:::go
+    ML["ml-service<br/>(Python)"]:::py
+    G["Gotenberg"]:::store
+
+    M -- "J1 токен · J2 доступ · J8 JWKS" --> C
+    R -- "J1 · J2 · J5 данные отчёта · J8" --> C
+    ML -- "J1 · J8" --> C
+    C -- "J3 метаданные · J4 attach · J7 удаление" --> M
+    C -- "J7 удаление отчётов" --> R
+    C -- "ML1 classify" --> ML
+    R -- "J6 изображения" --> M
+    ML -- "ML2 изображение" --> M
+    R -- "G1 HTML → PDF" --> G
