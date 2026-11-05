@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto core-service API
-  version: 0.2.1
+  version: 0.2.2
   description: |
     Authentication, users, properties, rooms, dictionaries, inspections, checklists,
     defects, observations, comparison, statistics and ML suggestions.
@@ -441,7 +441,10 @@ paths:
     delete:
       tags: [rooms]
       operationId: deleteRoom
-      summary: Delete a room without defects
+      summary: Delete a room that is not used
+      description: |
+        A room that appears in an inspection checklist or has defects cannot be deleted
+        (`409 RESOURCE_IN_USE`): completed inspections must keep their content.
       responses:
         '204':
           description: Deleted.
@@ -675,7 +678,12 @@ paths:
       tags: [inspections]
       operationId: createInspection
       summary: Create an inspection with its checklist
-      description: Checklist items are created for every selected room × every item of the selected templates in one transaction.
+      description: |
+        Checklist items are created for every selected room × every item of the selected templates in one transaction.
+        Item titles are copied in the language of `Accept-Language`. The new inspection is `DRAFT`.
+        Rooms of another property and unknown template codes are rejected with `400 VALIDATION_ERROR`.
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/AcceptLanguage'
       requestBody:
         required: true
         content:
@@ -718,6 +726,9 @@ paths:
       tags: [inspections]
       operationId: updateInspection
       summary: Update title, date, notes or start the inspection
+      description: |
+        Sending `status: IN_PROGRESS` starts a draft; repeating it for a started inspection changes nothing.
+        A completed inspection cannot be changed (`409 INVALID_STATE_TRANSITION`).
       requestBody:
         required: true
         content:
@@ -743,6 +754,7 @@ paths:
       tags: [inspections]
       operationId: deleteInspection
       summary: Delete a draft inspection
+      description: Only `DRAFT` inspections can be deleted; otherwise `409 INVALID_STATE_TRANSITION`.
       responses:
         '204':
           description: Deleted.
@@ -760,6 +772,7 @@ paths:
       tags: [inspections]
       operationId: completeInspection
       summary: Complete the inspection (further changes are forbidden)
+      description: Only an `IN_PROGRESS` inspection can be completed; otherwise `409 INVALID_STATE_TRANSITION`.
       requestBody:
         required: true
         content:
@@ -787,6 +800,9 @@ paths:
       tags: [checklist]
       operationId: addCustomChecklistItem
       summary: Add a custom checklist item
+      description: |
+        The room must belong to the property of the inspection (`400 VALIDATION_ERROR` otherwise).
+        The checklist of a completed inspection cannot be changed (`409 INVALID_STATE_TRANSITION`).
       requestBody:
         required: true
         content:
@@ -816,6 +832,9 @@ paths:
       tags: [checklist]
       operationId: updateChecklistItem
       summary: Set result and comment
+      description: |
+        Absent fields keep their values; `comment: null` clears the comment.
+        Items of a completed inspection cannot be changed (`409 INVALID_STATE_TRANSITION`).
       requestBody:
         required: true
         content:
