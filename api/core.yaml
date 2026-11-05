@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto core-service API
-  version: 0.2.0
+  version: 0.2.1
   description: |
     Authentication, users, properties, rooms, dictionaries, inspections, checklists,
     defects, observations, comparison, statistics and ML suggestions.
@@ -1418,19 +1418,23 @@ components:
       additionalProperties: false
 
     # ---------- properties & rooms ----------
+    PropertyName:
+      type: string
+      minLength: 1
+      maxLength: 200
+    PropertyAddress:
+      type: string
+      minLength: 1
+      maxLength: 500
     PropertyFields:
       type: object
       properties:
         name:
-          type: string
-          minLength: 1
-          maxLength: 200
+          $ref: '#/components/schemas/PropertyName'
         type:
           $ref: 'common.yaml#/components/schemas/PropertyType'
         address:
-          type: string
-          minLength: 1
-          maxLength: 500
+          $ref: '#/components/schemas/PropertyAddress'
         city:
           type: [string, 'null']
           maxLength: 100
@@ -1444,7 +1448,16 @@ components:
     CreatePropertyRequest:
       allOf:
         - $ref: '#/components/schemas/PropertyFields'
-      required: [name, type, address]
+        # Required properties are repeated next to `required` so that code generators mark them non-null.
+        - type: object
+          required: [name, type, address]
+          properties:
+            name:
+              $ref: '#/components/schemas/PropertyName'
+            type:
+              $ref: 'common.yaml#/components/schemas/PropertyType'
+            address:
+              $ref: '#/components/schemas/PropertyAddress'
       unevaluatedProperties: false
     UpdatePropertyRequest:
       allOf:
@@ -1463,6 +1476,12 @@ components:
           properties:
             id:
               $ref: 'common.yaml#/components/schemas/Uuid'
+            name:
+              $ref: '#/components/schemas/PropertyName'
+            type:
+              $ref: 'common.yaml#/components/schemas/PropertyType'
+            address:
+              $ref: '#/components/schemas/PropertyAddress'
             archivedAt:
               oneOf:
                 - $ref: 'common.yaml#/components/schemas/Timestamp'

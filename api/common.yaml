@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto — common components
-  version: 0.2.0
+  version: 0.2.1
   description: |
     Shared schemas, parameters, responses and security schemes referenced by every
     Inspecto service contract (core, media, report, ml). This document has no paths.
