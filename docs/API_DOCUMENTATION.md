@@ -39,7 +39,7 @@
 | 401 | `UNAUTHENTICATED`, `TOKEN_EXPIRED`, `INVALID_CREDENTIALS` | Нет или недействителен токен, неверный логин/пароль |
 | 403 | `FORBIDDEN` | Роль не позволяет действие (например, INSPECTOR меняет системную категорию) |
 | 404 | `NOT_FOUND` | Ресурса нет **или он чужой** (ADR-009) |
-| 409 | `VERSION_CONFLICT`, `EMAIL_TAKEN`, `CATEGORY_CODE_TAKEN`, `RESOURCE_IN_USE`, `INVALID_STATE_TRANSITION`, `REPORT_NOT_READY` | Конфликт версий или состояния; код системной категории занят; ресурс используется (помещение в осмотрах или с дефектами, категория с дефектами); отчёт ещё не готов |
+| 409 | `VERSION_CONFLICT`, `EMAIL_TAKEN`, `CATEGORY_CODE_TAKEN`, `RESOURCE_IN_USE`, `INVALID_STATE_TRANSITION`, `ALREADY_OBSERVED`, `REPORT_NOT_READY` | Конфликт версий или состояния; код системной категории занят; ресурс используется (помещение в осмотрах или с дефектами, категория с дефектами, черновик с наблюдениями других осмотров); дефект уже наблюдался в этом осмотре; отчёт ещё не готов |
 | 423 | `ACCOUNT_LOCKED` | Временная блокировка после неудачных входов |
 | 429 | `RATE_LIMITED` | Превышен лимит запросов (заголовок `Retry-After`) |
 | 503 | `DEPENDENCY_UNAVAILABLE` | Недоступен зависимый сервис (media, report, ml) |
@@ -84,7 +84,7 @@
 |---|---|---|
 | GET | `/defect-categories` | Системные + свои категории |
 | POST | `/defect-categories` | Своя категория `{name}` |
-| PATCH/DELETE | `/defect-categories/{id}` | Своя категория (удаление запрещено, если используется → деактивация) |
+| PATCH/DELETE | `/defect-categories/{id}` | Своя категория (удаление запрещено, если есть дефекты, → `409 RESOURCE_IN_USE`, можно деактивировать) |
 | POST/PATCH | `/admin/defect-categories[/{id}]` | Системные категории (только ADMIN) |
 | GET | `/checklist-templates` | Шаблоны чек-листов с пунктами |
 | GET | `/dictionaries/severities` | Шкала серьёзности с переводами |
@@ -112,7 +112,7 @@
 | PATCH | `/defects/{id}` | Категория, описание, серьёзность |
 | GET | `/defects/{id}/history` | История статусов |
 | GET | `/inspections/{id}/open-defects` | Дефекты, открытые до этого осмотра, с наблюдением в текущем осмотре (если уже сделано) |
-| POST | `/inspections/{id}/observations` | Наблюдение существующего дефекта `{defectId, status: OPEN\|RESOLVED, comment?, severity?}` |
+| POST | `/inspections/{id}/observations` | Наблюдение существующего дефекта `{defectId, status: OPEN\|RESOLVED, comment?, severity?}`; одно на дефект в осмотре, иначе `409 ALREADY_OBSERVED` |
 | PATCH | `/observations/{id}` | Изменение наблюдения |
 | POST | `/observations/{id}/photos` | Привязка загруженного фото `{photoId, caption?}` |
 | DELETE | `/observations/{id}/photos/{photoId}` | Отвязка (фото удаляется media через 24 ч) |

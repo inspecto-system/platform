@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto — common components
-  version: 0.2.2
+  version: 0.3.0
   description: |
     Shared schemas, parameters, responses and security schemes referenced by every
     Inspecto service contract (core, media, report, ml). This document has no paths.
@@ -179,6 +179,7 @@ components:
         - EMAIL_TAKEN
         - CATEGORY_CODE_TAKEN
         - RESOURCE_IN_USE
+        - ALREADY_OBSERVED
         - INVALID_STATE_TRANSITION
         - REPORT_NOT_READY
         - ACCOUNT_LOCKED
@@ -248,7 +249,7 @@ components:
           schema:
             $ref: '#/components/schemas/Problem'
     Conflict:
-      description: Version or state conflict (`VERSION_CONFLICT`, `INVALID_STATE_TRANSITION`, `EMAIL_TAKEN`, `CATEGORY_CODE_TAKEN`, `RESOURCE_IN_USE`, `REPORT_NOT_READY`).
+      description: Version or state conflict (`VERSION_CONFLICT`, `INVALID_STATE_TRANSITION`, `EMAIL_TAKEN`, `CATEGORY_CODE_TAKEN`, `RESOURCE_IN_USE`, `ALREADY_OBSERVED`, `REPORT_NOT_READY`).
       content:
         application/problem+json:
           schema:
