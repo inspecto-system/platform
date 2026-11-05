@@ -5,7 +5,7 @@
 | Компонент | Технологии | Обоснование |
 |---|---|---|
 | core-service | Java (LTS), Spring Boot, Spring Security, Spring Data JPA (Hibernate), Flyway, springdoc-openapi, MapStruct, Gradle (Kotlin DSL) | Индустриальный стандарт для транзакционной бизнес-логики; основной стек разработчика; зрелая экосистема безопасности |
-| media-service | Go, chi (маршрутизация), pgx (PostgreSQL), golang-migrate, AWS SDK for Go v2 (S3), библиотека обработки изображений (выбор — при T-204: `disintegration/imaging` или `govips`) | Сервис ввода-вывода и обработки изображений: конкурентность, малый образ, быстрый старт |
+| media-service | Go, chi (маршрутизация), pgx (PostgreSQL), golang-migrate, AWS SDK for Go v2 (S3), стандартная библиотека и `golang.org/x/image` для изображений (ADR-025), golang-jwt + keyfunc (проверка JWT по JWKS) | Сервис ввода-вывода и обработки изображений: конкурентность, малый образ, быстрый старт |
 | report-service | Go, chi, pgx, golang-migrate, AWS SDK for Go v2 (S3), `html/template` | Фоновые задания и работа с файлами; `html/template` автоматически экранирует данные |
 | PDF-рендеринг | Gotenberg (headless Chromium) | Качественная вёрстка HTML/CSS, кириллица, разрывы страниц (ADR-012) |
 | ml-service | Python, FastAPI, ONNX Runtime, Pillow, Pydantic | Лёгкий CPU-инференс без PyTorch в проде |

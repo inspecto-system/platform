@@ -210,13 +210,14 @@
 | original_key | text | Ключ сжатого оригинала в бакете `photos` |
 | preview_key | text | ≈1280 px — для просмотра и PDF |
 | thumb_key | text | ≈320 px |
-| content_type | text | `image/jpeg`, `image/png`, `image/webp` |
-| size_bytes | bigint | |
-| width, height | int | |
-| sha256 | text | Контроль целостности |
+| content_type | text | Формат хранения — всегда `image/jpeg` (ADR-025); загружать можно JPEG, PNG и WebP |
+| size_bytes | bigint | Размер сохранённого оригинала |
+| width, height | int | Размеры оригинала после поворота по EXIF |
+| sha256 | text | SHA-256 сохранённого оригинала, контроль целостности |
+| idempotency_key | text NULL | Ключ `Idempotency-Key`: повтор загрузки возвращает то же фото |
 | created_at, attached_at | timestamptz | |
 
-Индексы: `(property_id)`, `(status, created_at)`.
+Индексы: `(property_id)`, `(owner_id)`, `(status, created_at)`; `UNIQUE (owner_id, idempotency_key)`.
 
 ## 5. База `inspecto_report`
 
