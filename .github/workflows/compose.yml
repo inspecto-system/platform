@@ -1,0 +1,60 @@
+name: compose
+
+on:
+  push:
+    branches: [main]
+    paths: ["deploy/**", ".github/workflows/compose.yml"]
+  pull_request:
+    paths: ["deploy/**", ".github/workflows/compose.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Dev compose smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE: docker compose -f deploy/compose.dev.yaml --env-file deploy/.env
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Start infrastructure
+        run: |
+          cp deploy/.env.example deploy/.env
+          $COMPOSE up -d --wait --wait-timeout 300
+      - name: PostgreSQL — TLS, roles and isolation
+        run: |
+          set -a; . deploy/.env; set +a
+          q() { $COMPOSE exec -T -e PGPASSWORD="$3" postgres psql "host=127.0.0.1 sslmode=require dbname=$1 user=$2" -tAc "$4"; }
+          echo "TLS in use: $(q inspecto_core core_app "$CORE_APP_PASSWORD" 'select ssl from pg_stat_ssl where pid = pg_backend_pid()')"
+          test "$(q inspecto_core core_app "$CORE_APP_PASSWORD" 'select ssl from pg_stat_ssl where pid = pg_backend_pid()')" = "t"
+          q inspecto_core core_migrator "$CORE_MIGRATOR_PASSWORD" 'create table smoke(id int); insert into smoke values (1)'
+          test "$(q inspecto_core core_app "$CORE_APP_PASSWORD" 'select count(*) from smoke')" = "1"
+          if q inspecto_core core_app "$CORE_APP_PASSWORD" 'create table forbidden(id int)'; then echo "app role must not run DDL"; exit 1; fi
+          if q inspecto_core media_app "$MEDIA_APP_PASSWORD" 'select 1'; then echo "media_app must not connect to inspecto_core"; exit 1; fi
+          if $COMPOSE exec -T -e PGPASSWORD="$CORE_APP_PASSWORD" postgres psql "host=127.0.0.1 sslmode=disable dbname=inspecto_core user=core_app" -c 'select 1'; then echo "non-TLS connection must be rejected"; exit 1; fi
+          echo "PostgreSQL checks passed"
+      - name: S3 — buckets and per-service access
+        run: |
+          set -a; . deploy/.env; set +a
+          s3() { AWS_ACCESS_KEY_ID="$1" AWS_SECRET_ACCESS_KEY="$2" AWS_DEFAULT_REGION=us-east-1 aws --endpoint-url http://127.0.0.1:8333 s3 "${@:3}"; }
+          echo hello > /tmp/probe.txt
+          s3 "$S3_MEDIA_ACCESS_KEY" "$S3_MEDIA_SECRET_KEY" cp /tmp/probe.txt s3://photos/probe.txt
+          s3 "$S3_MEDIA_ACCESS_KEY" "$S3_MEDIA_SECRET_KEY" ls s3://photos/
+          if s3 "$S3_MEDIA_ACCESS_KEY" "$S3_MEDIA_SECRET_KEY" ls s3://reports/; then echo "media must not read reports"; exit 1; fi
+          s3 "$S3_REPORT_ACCESS_KEY" "$S3_REPORT_SECRET_KEY" cp /tmp/probe.txt s3://reports/probe.txt
+          if s3 "$S3_REPORT_ACCESS_KEY" "$S3_REPORT_SECRET_KEY" ls s3://photos/; then echo "report must not read photos"; exit 1; fi
+          echo "S3 checks passed"
+      - name: Gotenberg — renders HTML and blocks network access
+        run: |
+          printf '<html><body><h1>Проверка кириллицы</h1><img src="https://example.com/x.png"></body></html>' > /tmp/index.html
+          curl -fsS -o /tmp/out.pdf -F files=@/tmp/index.html http://127.0.0.1:3000/forms/chromium/convert/html
+          head -c 5 /tmp/out.pdf | grep -q '%PDF-'
+          echo "Gotenberg checks passed"
+      - name: Logs on failure
+        if: failure()
+        run: $COMPOSE logs --no-color
+      - name: Stop
+        if: always()
+        run: $COMPOSE down -v

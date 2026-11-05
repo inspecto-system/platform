@@ -5,15 +5,15 @@
 | Компонент | Технологии | Обоснование |
 |---|---|---|
 | core-service | Java (LTS), Spring Boot, Spring Security, Spring Data JPA (Hibernate), Flyway, springdoc-openapi, MapStruct, Gradle (Kotlin DSL) | Индустриальный стандарт для транзакционной бизнес-логики; основной стек разработчика; зрелая экосистема безопасности |
-| media-service | Go, chi (маршрутизация), pgx (PostgreSQL), golang-migrate, minio-go, библиотека обработки изображений (выбор — при T-204: `disintegration/imaging` или `govips`) | Сервис ввода-вывода и обработки изображений: конкурентность, малый образ, быстрый старт |
-| report-service | Go, chi, pgx, golang-migrate, minio-go, `html/template` | Фоновые задания и работа с файлами; `html/template` автоматически экранирует данные |
+| media-service | Go, chi (маршрутизация), pgx (PostgreSQL), golang-migrate, AWS SDK for Go v2 (S3), библиотека обработки изображений (выбор — при T-204: `disintegration/imaging` или `govips`) | Сервис ввода-вывода и обработки изображений: конкурентность, малый образ, быстрый старт |
+| report-service | Go, chi, pgx, golang-migrate, AWS SDK for Go v2 (S3), `html/template` | Фоновые задания и работа с файлами; `html/template` автоматически экранирует данные |
 | PDF-рендеринг | Gotenberg (headless Chromium) | Качественная вёрстка HTML/CSS, кириллица, разрывы страниц (ADR-012) |
 | ml-service | Python, FastAPI, ONNX Runtime, Pillow, Pydantic | Лёгкий CPU-инференс без PyTorch в проде |
 | ML-исследование | PyTorch, timm, scikit-learn, Google Colab (GPU) | Стандарт для transfer learning; метрики sklearn |
 | Web | Next.js (App Router), React, TypeScript (strict), Tailwind CSS, shadcn/ui, TanStack Query, next-intl, openapi-typescript | Типобезопасность от контракта до UI; доступные компоненты |
 | Android | Kotlin, Jetpack Compose, ViewModel, Hilt, Room, Retrofit + OkHttp, kotlinx.serialization, CameraX, WorkManager, Coil, DataStore | Современный рекомендуемый стек Android |
 | База данных | PostgreSQL 16 | Требование проекта; транзакции, `jsonb`, надёжность |
-| Хранилище файлов | MinIO (S3 API) | Отделение файлов от БД (ADR-006), совместимость с облачным S3 |
+| Хранилище файлов | SeaweedFS (S3 API) | Отделение файлов от БД (ADR-006, ADR-024), совместимость с облачным S3 |
 | Точка входа | nginx | TLS, маршрутизация, rate limiting, заголовки безопасности (ADR-013) |
 | Контракты | OpenAPI 3.1, Spectral, openapi-generator (Kotlin), openapi-typescript | Contract-first (ADR-014) |
 | Инфраструктура | Docker, docker compose | ADR-020 |

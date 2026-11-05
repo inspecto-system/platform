@@ -12,7 +12,7 @@
 | `inspecto_media` | media-service | `media_app` | Метаданные фотографий |
 | `inspecto_report` | report-service | `report_app` | Задания генерации отчётов и метаданные PDF |
 
-Файлы (фото, PDF) — в MinIO (ADR-006), в базах только ключи объектов.
+Файлы (фото, PDF) — в SeaweedFS (ADR-006), в базах только ключи объектов.
 
 Пользователи СУБД сервисов не являются владельцами схемы: миграции выполняются отдельным пользователем `*_migrator`, а приложение получает только `SELECT/INSERT/UPDATE/DELETE` (см. SECURITY.md).
 
