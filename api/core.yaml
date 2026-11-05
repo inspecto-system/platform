@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto core-service API
-  version: 0.2.2
+  version: 0.3.0
   description: |
     Authentication, users, properties, rooms, dictionaries, inspections, checklists,
     defects, observations, comparison, statistics and ML suggestions.
@@ -549,6 +549,7 @@ paths:
       tags: [dictionaries]
       operationId: deleteOwnDefectCategory
       summary: Delete an unused own category
+      description: A category used by defects cannot be deleted (`409 RESOURCE_IN_USE`); deactivate it instead.
       responses:
         '204':
           description: Deleted.
@@ -754,7 +755,10 @@ paths:
       tags: [inspections]
       operationId: deleteInspection
       summary: Delete a draft inspection
-      description: Only `DRAFT` inspections can be deleted; otherwise `409 INVALID_STATE_TRANSITION`.
+      description: |
+        Only `DRAFT` inspections can be deleted; otherwise `409 INVALID_STATE_TRANSITION`. Defects first found in
+        the draft are deleted with it. A draft that observes earlier defects, or whose defects were observed in
+        other inspections, cannot be deleted (`409 RESOURCE_IN_USE`).
       responses:
         '204':
           description: Deleted.
@@ -864,6 +868,7 @@ paths:
       tags: [defects]
       operationId: listDefects
       summary: Defects of a property
+      description: Newest first. `currentStatus` is the status of the observation in the latest inspection by `inspectedAt`.
       parameters:
         - $ref: 'common.yaml#/components/parameters/Page'
         - $ref: 'common.yaml#/components/parameters/Size'
@@ -898,6 +903,11 @@ paths:
       tags: [defects]
       operationId: createDefect
       summary: Register a new defect with its first observation
+      description: |
+        Creates the defect and its `OPEN` observation in this inspection. The room must belong to the property,
+        the category must be active and visible to the user, the checklist item (if given) must be an item of
+        this inspection in the same room; otherwise `400 VALIDATION_ERROR`. A completed inspection cannot be
+        changed (`409 INVALID_STATE_TRANSITION`).
       requestBody:
         required: true
         content:
@@ -942,6 +952,8 @@ paths:
       tags: [defects]
       operationId: updateDefect
       summary: Update category, title, description or severity
+      description: |
+        Absent fields keep their values; `description: null` clears it. The category must be active and visible to the user.
       requestBody:
         required: true
         content:
@@ -971,6 +983,7 @@ paths:
       tags: [defects]
       operationId: getDefectHistory
       summary: Status history of a defect
+      description: A change is recorded whenever `currentStatus` changes, including the creation of the defect (`fromStatus` is null).
       responses:
         '200':
           description: History, oldest first.
@@ -992,6 +1005,10 @@ paths:
       tags: [defects]
       operationId: listOpenDefectsForInspection
       summary: Defects open before this inspection, to be marked during a repeat inspection
+      description: |
+        Defects of the property that were first found in an earlier inspection and whose latest observation
+        among inspections earlier than this one (by `inspectedAt`) is `OPEN`. `lastObservation` is that
+        observation.
       responses:
         '200':
           description: Open defects with the observation in this inspection, if already made.
@@ -1013,6 +1030,11 @@ paths:
       tags: [defects]
       operationId: createObservation
       summary: Record an existing defect in this inspection (still open or confirmed resolved)
+      description: |
+        The defect must belong to the property of the inspection, the checklist item (if given) must be an item of
+        this inspection in the room of the defect (`400 VALIDATION_ERROR`). One observation per defect and
+        inspection (`409 ALREADY_OBSERVED`); a completed inspection cannot be changed (`409 INVALID_STATE_TRANSITION`).
+        Without `severity` the current severity of the defect is used.
       requestBody:
         required: true
         content:
@@ -1042,6 +1064,8 @@ paths:
       tags: [defects]
       operationId: updateObservation
       summary: Update an observation
+      description: |
+        Absent fields keep their values; `comment: null` clears it. Observations of a completed inspection cannot be changed (`409 INVALID_STATE_TRANSITION`).
       requestBody:
         required: true
         content:
