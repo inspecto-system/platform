@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto ml-service API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Defect category classification of a photo (ADR-016). Internal only: called by core-service
     with a service token; never exposed through nginx.

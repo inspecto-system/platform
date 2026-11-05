@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto media-service API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Upload, validation, compression, storage and delivery of photos (ADR-006).
     External paths are served behind nginx under `/api/v1/photos`; `/internal/v1/**` accepts only service tokens.
