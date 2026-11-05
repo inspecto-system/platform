@@ -30,6 +30,12 @@ jobs:
           dependency-graph: generate-and-submit
       - name: Gradle build
         run: ./gradlew build --no-daemon --stacktrace
+      - name: Print analysis findings
+        if: failure()
+        run: |
+          for f in build/reports/spotbugs/*.txt; do [ -f "$f" ] && { echo "== $f"; cat "$f"; }; done
+          for f in build/reports/pmd/*.txt build/reports/checkstyle/*.txt; do [ -f "$f" ] && { echo "== $f"; cat "$f"; }; done
+          true
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

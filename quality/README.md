@@ -17,3 +17,7 @@
 | `.github/workflows/security.yml` | Gitleaks, Dependency Review, CodeQL | `uses: inspecto-system/platform/.github/workflows/security.yml@main` |
 
 Workflow для Android, Web и Python добавляются вместе с каркасами этих компонентов (T-304, T-501, T-601).
+
+Вызывающий workflow должен выдать права не меньше тех, что запрашивает переиспользуемый: `contents: write` для `java-gradle.yml` (отправка графа зависимостей), `security-events: write` для `security.yml` (CodeQL), иначе запуск завершается ошибкой `startup_failure`.
+
+Каждый вызывающий workflow задаёт `concurrency` с `cancel-in-progress: true`: новый коммит в ветку отменяет устаревшие запуски и не занимает очередь GitHub Actions. CodeQL — самая долгая проверка — запускается при слиянии в `main` и еженедельно, а не на каждый коммит PR; Gitleaks и Dependency Review выполняются на каждом PR.

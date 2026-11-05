@@ -7,6 +7,10 @@ on:
   pull_request:
     paths: ["api/**", ".spectral.yaml", ".github/workflows/api.yml"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
