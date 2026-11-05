@@ -6,7 +6,7 @@
 
 | Компонент | Адрес на машине разработчика | Назначение |
 |---|---|---|
-| PostgreSQL 16 | `127.0.0.1:5432` (только TLS) | Базы `inspecto_core`, `inspecto_media`, `inspecto_report`; на каждую — пользователи `<сервис>_migrator` (миграции) и `<сервис>_app` (работа сервиса) |
+| PostgreSQL 16 | `127.0.0.1:5432` (только TLS; порт меняется переменной `POSTGRES_PORT`) | Базы `inspecto_core`, `inspecto_media`, `inspecto_report`; на каждую — пользователи `<сервис>_migrator` (миграции) и `<сервис>_app` (работа сервиса) |
 | SeaweedFS S3 | `http://127.0.0.1:8333` | Бакеты `photos` (media-service) и `reports` (report-service); у каждого сервиса свои ключи доступа только к своему бакету |
 | Gotenberg | `http://127.0.0.1:3000` | HTML → PDF для report-service; Chromium не может обращаться к сети |
 
@@ -26,7 +26,7 @@ docker compose -f deploy/compose.dev.yaml --env-file deploy/.env up -d --wait
 ### Подключение к базе
 
 ```bash
-psql "host=127.0.0.1 port=5432 dbname=inspecto_core user=core_app sslmode=require"
+psql "host=127.0.0.1 port=${POSTGRES_PORT:-5432} dbname=inspecto_core user=core_app sslmode=require"
 ```
 
 Сертификат PostgreSQL самоподписанный (создаётся при первом запуске), поэтому в разработке используется `sslmode=require`; в эксплуатации — `verify-full` с доверенным сертификатом.
