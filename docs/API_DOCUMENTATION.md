@@ -173,7 +173,7 @@
 | core | GET | `/internal/v1/inspections/{id}/report-data` | report | Агрегат осмотра для отчёта (объект, помещения, чек-лист, дефекты, наблюдения, id фото) |
 | media | GET | `/internal/v1/photos/{id}` | core | Метаданные фото (проверка владельца и объекта) |
 | media | POST | `/internal/v1/photos/{id}/attach` | core | Пометить фото прикреплённым |
-| media | GET | `/internal/v1/photos/{id}/content?variant=| GET | `/photos/{id}/content?variant=original|preview|thumb` | JPEG (все варианты хранятся в JPEG, ADR-025), `Cache-Control: private` | `200 image/jpeg` |` | report, ml | Байты изображения |
+| media | GET | `/internal/v1/photos/{id}/content?variant=preview` | report, ml | Байты изображения |
 | media | DELETE | `/internal/v1/photos?propertyId=` / `?ownerId=` | core (outbox) | Массовое удаление |
 | report | DELETE | `/internal/v1/reports?propertyId=` / `?requestedBy=` | core (outbox) | Массовое удаление отчётов |
 | ml | POST | `/internal/v1/classify` | core | `{photoId}` → `{modelVersion, predictions: [{code, probability}]}` (top-3) |
