@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto media-service API
-  version: 0.3.0
+  version: 0.3.1
   description: |
     Upload, validation, compression, storage and delivery of photos (ADR-006).
     External paths are served behind nginx under `/api/v1/photos`; `/internal/v1/**` accepts only service tokens.
@@ -41,8 +41,13 @@ paths:
       summary: Upload a photo
       description: |
         The type is checked by file signature, dimensions are checked before decoding,
-        EXIF metadata is removed and three variants are stored. The photo must be attached to an
-        observation through core-service within 24 hours, otherwise it is deleted.
+        EXIF metadata is removed and three variants are stored, all as JPEG (ADR-025). The photo must
+        be attached to an observation through core-service within 24 hours, otherwise it is deleted.
+        The user needs write access to the property (`404` otherwise). Errors: `400
+        UNSUPPORTED_MEDIA_TYPE` (not a JPEG, PNG or WebP file), `400 IMAGE_DIMENSIONS_TOO_LARGE`
+        (more pixels than allowed), `413 IMAGE_TOO_LARGE` (file larger than allowed), `503
+        DEPENDENCY_UNAVAILABLE` (core-service cannot be reached). A repeated request with the same
+        `Idempotency-Key` from the same user returns the photo created by the first one.
       parameters:
         - $ref: 'common.yaml#/components/parameters/IdempotencyKey'
       requestBody:
@@ -85,6 +90,7 @@ paths:
       tags: [photos]
       operationId: getPhotoContent
       summary: Download a photo variant
+      description: The user needs read access to the property of the photo (`404` otherwise).
       parameters:
         - name: variant
           in: query
@@ -92,20 +98,12 @@ paths:
             $ref: 'common.yaml#/components/schemas/PhotoVariant'
       responses:
         '200':
-          description: 'Image bytes, served with Cache-Control: private.'
+          description: 'JPEG bytes, served with Cache-Control: private and X-Content-Type-Options: nosniff.'
           content:
             image/jpeg:
               schema:
                 type: string
                 contentMediaType: image/jpeg
-            image/png:
-              schema:
-                type: string
-                contentMediaType: image/png
-            image/webp:
-              schema:
-                type: string
-                contentMediaType: image/webp
         '401':
           $ref: 'common.yaml#/components/responses/Unauthorized'
         '404':
@@ -120,6 +118,7 @@ paths:
       tags: [photos]
       operationId: deletePhoto
       summary: Delete an unattached photo
+      description: Only the user who uploaded the photo can delete it; an attached photo cannot be deleted (`409 RESOURCE_IN_USE`).
       responses:
         '204':
           description: Deleted.
@@ -234,6 +233,7 @@ components:
       required: [allowedContentTypes, maxFileSizeBytes, maxPixels, maxPhotosPerObservation]
       properties:
         allowedContentTypes:
+          description: Types accepted for upload; stored variants are always JPEG.
           type: array
           items:
             type: string
@@ -268,7 +268,9 @@ components:
         propertyId:
           $ref: 'common.yaml#/components/schemas/Uuid'
         contentType:
+          description: Format of the stored variants (ADR-025).
           type: string
+          const: image/jpeg
         width:
           type: integer
         height:

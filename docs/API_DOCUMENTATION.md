@@ -148,8 +148,8 @@
 |---|---|---|---|
 | GET | `/photos/limits` | Лимиты: допустимые типы, максимальный размер, максимум фото на наблюдение | `200` |
 | POST | `/photos` | `multipart/form-data`: `file`, `propertyId` | `201 {id, contentType, width, height, sizeBytes}` |
-| GET | `/photos/{id}/content?variant=original\|preview\|thumb` | Файл изображения, `Cache-Control: private` | `200` image |
-| DELETE | `/photos/{id}` | Удаление неприкреплённого фото | `204`; прикреплённое — `409` |
+| GET | `/photos/{id}/content?variant=original\|preview\|thumb` | JPEG (все варианты хранятся в JPEG, ADR-025), `Cache-Control: private` | `200 image/jpeg` |
+| DELETE | `/photos/{id}` | Удаление неприкреплённого фото (только загрузившим) | `204`; прикреплённое — `409 RESOURCE_IN_USE` |
 
 ## 4. report-service (внешний API)
 
