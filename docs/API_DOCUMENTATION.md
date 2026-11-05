@@ -39,7 +39,7 @@
 | 401 | `UNAUTHENTICATED`, `TOKEN_EXPIRED`, `INVALID_CREDENTIALS` | Нет или недействителен токен, неверный логин/пароль |
 | 403 | `FORBIDDEN` | Роль не позволяет действие (например, INSPECTOR меняет системную категорию) |
 | 404 | `NOT_FOUND` | Ресурса нет **или он чужой** (ADR-009) |
-| 409 | `VERSION_CONFLICT`, `EMAIL_TAKEN`, `CATEGORY_CODE_TAKEN`, `RESOURCE_IN_USE`, `INVALID_STATE_TRANSITION`, `REPORT_NOT_READY` | Конфликт версий или состояния; код системной категории занят; ресурс используется (помещение или категория с дефектами); отчёт ещё не готов |
+| 409 | `VERSION_CONFLICT`, `EMAIL_TAKEN`, `CATEGORY_CODE_TAKEN`, `RESOURCE_IN_USE`, `INVALID_STATE_TRANSITION`, `REPORT_NOT_READY` | Конфликт версий или состояния; код системной категории занят; ресурс используется (помещение в осмотрах или с дефектами, категория с дефектами); отчёт ещё не готов |
 | 423 | `ACCOUNT_LOCKED` | Временная блокировка после неудачных входов |
 | 429 | `RATE_LIMITED` | Превышен лимит запросов (заголовок `Retry-After`) |
 | 503 | `DEPENDENCY_UNAVAILABLE` | Недоступен зависимый сервис (media, report, ml) |
@@ -75,7 +75,7 @@
 | DELETE | `/properties/{id}` | Физическое удаление со всеми данными → `202` |
 | GET | `/properties/{id}/rooms` | Помещения |
 | POST | `/properties/{id}/rooms` | `{name, roomType, sortOrder?}` |
-| PATCH/DELETE | `/rooms/{id}` | Изменение / удаление (запрещено, если есть дефекты, → `409`) |
+| PATCH/DELETE | `/rooms/{id}` | Изменение / удаление (запрещено, если помещение есть в осмотрах или у него есть дефекты, → `409 RESOURCE_IN_USE`) |
 | GET | `/properties/{id}/statistics` | Распределение дефектов по категориям, серьёзности, статусам и осмотрам |
 
 ### Справочники
