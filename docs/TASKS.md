@@ -61,7 +61,7 @@
 - **Готово, когда:** `docker compose up` поднимает все компоненты, healthcheck зелёный.
 - **Проверка:** запуск у владельца проекта; подключение к каждой базе своим пользователем.
 
-### T-006 · Каркас core-service — `TODO`
+### T-006 · Каркас core-service — `DONE`
 
 - [core-service] **Описание:** Spring Boot / Java LTS / Gradle (Kotlin DSL); точные версии выбираются по TECH_STACK.md §2, структура пакетов, Flyway, Spotless, Checkstyle, PMD, SpotBugs, JaCoCo, health endpoint, CI.
 - **Цель:** основа для CP1, стандарты качества с первого коммита.
@@ -88,7 +88,7 @@
 
 ## Неделя 2 — CP1: ядро core-service
 
-### T-101 · Пользователи и аутентификация — `TODO`
+### T-101 · Пользователи и аутентификация — `IN PROGRESS`
 
 - [core-service] **Описание:** регистрация, вход, refresh с ротацией и обнаружением повторного использования, выход, `GET/PATCH /users/me`; Argon2id; JWKS; блокировка после неудачных попыток.
 - **Цель:** ADR-007, ADR-008.
