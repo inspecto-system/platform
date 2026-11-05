@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto report-service API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Asynchronous PDF report generation (ADR-011, ADR-012).
     External paths are served behind nginx under `/api/v1/reports`; `/internal/v1/**` accepts only service tokens.
