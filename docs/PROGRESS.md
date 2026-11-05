@@ -11,12 +11,12 @@
 
 ## Где остановилась работа
 
-Вертикальный срез 1, часть core-service: слиты T-102, T-103, T-104 и контракт `api-v0.2.0`. Последний PR среза в core-service — сервисные токены, внутренний API доступа и JSON-логи (T-105, остаток T-106): core-service#8, CI зелёный, ждёт слияния.
+Вертикальный срез 1: часть core-service (T-102…T-106) и каркас Android (T-304) слиты, CI Android работает через общий шаблон. Следующая задача — вход и объекты в Android (T-305); перед ней — уточнение контракта `0.2.1` (platform#17), чтобы обязательные поля объекта были не nullable в сгенерированном клиенте.
 
 ## Следующие действия
 
-1. Владелец: слить core-service#8; удалить ветку `ci/reusable-workflows` в `platform`.
-2. Claude: CI-шаблон Android в `platform`, затем каркас Android (T-304) и вход с объектами (T-305); план согласовать с владельцем.
+1. Владелец: слить platform#17 и Dependabot android#2; удалить ветку `ci/reusable-workflows` в `platform`.
+2. Claude: тег `api-v0.2.1`, затем T-305 — вход и регистрация, токены в DataStore с ключом Android Keystore, список и карточка объекта, помещения.
 3. Владелец: защита веток `main` (T-007).
 4. Позже: назначение роли `ADMIN` через API (сейчас — SQL, см. core-service#7); переменные `CORE_*_CLIENT_SECRET` в `deploy/.env.example`, когда сервисы появятся в compose.
 
@@ -28,10 +28,19 @@
 | Окружение Claude не имеет доступа к Maven Central, npm, PyPI, Go proxy и Docker Hub | Решено: Claude работает локально у владельца, сборки и тесты запускаются до пуша |
 | На Windows (`core.autocrlf=true`) shell-скрипты выгружаются с CRLF и не работают в контейнерах | Исправлено в `platform` (#11, `.gitattributes`); в остальные репозитории `.gitattributes` добавляется их ближайшим PR |
 | Порт 5432 на ПК владельца занят локальным PostgreSQL | Решено: переменная `POSTGRES_PORT` (#11) |
+| Android SDK не установлен у владельца | Решено: Android Studio 2026.2.2, SDK API 37, эмулятор `Medium_Phone` |
+| Dependency graph был выключен в android, media-service, report-service, web (Dependency review падал) | Решено: включён владельцем во всех репозиториях |
 | MinIO переведён в архив (2026) | Решено: ADR-024, SeaweedFS |
 | В каждом репозитории есть начальный коммит с README — будет заменён в первом PR каждого репозитория | Принято к сведению |
 
 ## Журнал сессий
+
+### 2026-11-05 — Сессия 2 (продолжение): каркас Android (T-304)
+
+- platform#16: общий CI-шаблон `android.yml` (ktlint, detekt, Android Lint, unit-тесты, Kover, `assembleDebug`).
+- android#1 (T-304): AGP 9.5, Kotlin 2.4, Compose, Hilt, клиент API из контракта `api-v0.2.0` (openapi-generator), JUnit 5 и Robolectric; Gradle на Java 21. Приложение проверено на эмуляторе API 37.
+- android#3: ручной запуск CI; исправлен бит исполнения `gradlew`. Первый зелёный CI Android, включая CodeQL для Kotlin.
+- platform#17: обязательные поля `name`, `type`, `address` объекта видны генератору (контракт `0.2.1`).
 
 ### 2026-11-05 — Сессия 2 (продолжение): срез 1, T-104 и T-105
 
