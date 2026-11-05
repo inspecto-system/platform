@@ -1,0 +1,56 @@
+# Reusable workflow: static analysis, unit tests, coverage and debug build of the Android app.
+# The default task list mirrors CODE_QUALITY.md §6: ktlint, detekt, Android Lint, JUnit tests,
+# Kover coverage verification and assembleDebug. The Android SDK is preinstalled on the runner.
+name: android
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: JDK version (Temurin) used to run Gradle.
+        type: string
+        default: "21"
+      gradle-tasks:
+        description: Gradle tasks to run.
+        type: string
+        default: ktlintCheck detekt lintDebug testDebugUnitTest koverVerify assembleDebug
+
+permissions:
+  contents: write # dependency graph submission
+
+jobs:
+  build:
+    name: Analyse, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          dependency-graph: generate-and-submit
+      - name: Gradle checks
+        env:
+          GRADLE_TASKS: ${{ inputs.gradle-tasks }}
+        # The task list is split into words on purpose.
+        run: |
+          # shellcheck disable=SC2086
+          ./gradlew $GRADLE_TASKS --no-daemon --stacktrace
+      - name: Print analysis findings
+        if: failure()
+        run: |
+          find . -path '*/build/reports/*' -name '*.txt' -not -path '*/tests/*' -print0 |
+            while IFS= read -r -d '' f; do echo "== $f"; cat "$f"; done
+          true
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-reports
+          path: |
+            **/build/reports/
+            **/build/test-results/
+          retention-days: 7
