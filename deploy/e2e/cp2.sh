@@ -142,4 +142,39 @@ expect 404
 wait_gone "$SECOND"
 ok "property and its photo deleted"
 
+step "Deleting the account deletes all its data (T-303)"
+ACCOUNT_EMAIL="cp2-account-$RUN@example.com"
+request POST "$CORE/auth/register" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$ACCOUNT_EMAIL\",\"password\":\"$PASSWORD\",\"fullName\":\"Leaving\"}" > /dev/null
+expect 201
+TOKEN=$(request POST "$CORE/auth/login" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$ACCOUNT_EMAIL\",\"password\":\"$PASSWORD\",\"client\":\"android\"}" | jq -r .accessToken)
+expect 200
+OWNER=$(json GET "$CORE/users/me" | jq -r .id)
+PROPERTY=$(json POST "$CORE/properties" '{"name":"To delete","type":"HOUSE","address":"Lesnaya 1"}' | jq -r .id)
+expect 201
+ROOM=$(json POST "$CORE/properties/$PROPERTY/rooms" '{"name":"Hall","roomType":"HALLWAY"}' | jq -r .id)
+INSPECTION=$(json POST "$CORE/properties/$PROPERTY/inspections" \
+  "{\"inspectedAt\":\"2026-10-01T09:00:00Z\",\"roomIds\":[\"$ROOM\"],\"templateCodes\":[\"ROOM_STANDARD\"]}" | jq -r .id)
+expect 201
+OBSERVATION=$(json POST "$CORE/inspections/$INSPECTION/defects" \
+  "{\"roomId\":\"$ROOM\",\"categoryId\":\"$CRACK\",\"elementGroup\":\"FLOOR\",\"title\":\"Scratch\",\"severity\":\"MINOR\"}" \
+  | jq -r '.observations[0].id')
+expect 201
+LAST=$(request POST "$MEDIA/photos" -H "Authorization: Bearer $TOKEN" -F "propertyId=$PROPERTY" -F "file=@$PHOTO;type=image/jpeg" | jq -r .id)
+expect 201
+json POST "$CORE/observations/$OBSERVATION/photos" "{\"photoId\":\"$LAST\"}" > /dev/null
+expect 201
+json DELETE "$CORE/users/me" '{"password":"Wrong-Password-1"}' > /dev/null
+expect 400
+json DELETE "$CORE/users/me" "{\"password\":\"$PASSWORD\"}" > /dev/null
+expect 202
+request POST "$CORE/auth/login" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$ACCOUNT_EMAIL\",\"password\":\"$PASSWORD\",\"client\":\"android\"}" > /dev/null
+expect 401
+ok "account $OWNER deleted; it cannot sign in"
+# run.sh checks the databases and SeaweedFS from outside the network: the photo is no longer
+# readable through the API right away (core denies access), so only storage proves the clean-up.
+printf 'CLEANUP owner=%s property=%s\n' "$OWNER" "$PROPERTY"
+
 printf '\nCP2 scenario passed.\n'
