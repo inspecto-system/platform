@@ -1,0 +1,46 @@
+# End-to-end scenario of CP2 (T-207): core-service and media-service built from the main branches
+# of their repositories, run in deploy/compose.dev.yaml with PostgreSQL and SeaweedFS.
+name: e2e
+
+on:
+  schedule:
+    - cron: "23 4 * * *" # daily, catches breaking changes merged in any service
+  workflow_dispatch:
+  pull_request:
+    paths: ["deploy/**", ".github/workflows/e2e.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  cp2:
+    name: CP2 scenario on compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE: docker compose -f platform/deploy/compose.dev.yaml --env-file platform/deploy/.env --profile apps
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: platform
+      # The compose file builds the services from sibling clones (../../core-service, ../../media-service).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: inspecto-system/core-service
+          path: core-service
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: inspecto-system/media-service
+          path: media-service
+      - name: Start services
+        run: |
+          cp platform/deploy/.env.example platform/deploy/.env
+          $COMPOSE up -d --build --wait --wait-timeout 600
+      - name: CP2 scenario
+        run: sh platform/deploy/e2e/run.sh
+      - name: Logs on failure
+        if: failure()
+        run: $COMPOSE logs --no-color core media
+      - name: Stop
+        if: always()
+        run: $COMPOSE down -v
