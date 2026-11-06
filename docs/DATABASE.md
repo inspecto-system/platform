@@ -175,7 +175,7 @@
 
 Ограничение `UNIQUE (defect_id, inspection_id)` — одно наблюдение дефекта в осмотре.
 
-**observation_photos**: `id`, `observation_id` FK ON DELETE CASCADE, `photo_id uuid` (ссылка на `inspecto_media.photos`, без FK), `caption`, `sort_order`, `created_at`. `UNIQUE (observation_id, photo_id)`.
+**observation_photos**: `id`, `observation_id` FK ON DELETE CASCADE, `photo_id uuid` (ссылка на `inspecto_media.photos`, без FK), `caption`, `sort_order`, `created_at`. `UNIQUE (photo_id)` — фото принадлежит одному наблюдению.
 
 **defect_status_history**: `id`, `defect_id` FK ON DELETE CASCADE, `from_status NULL`, `to_status`, `inspection_id NULL`, `changed_by`, `changed_at`, `comment`. Append-only.
 
@@ -195,7 +195,7 @@
 | decision | text NULL CHECK IN (`ACCEPTED_TOP1`,`ACCEPTED_OTHER`,`REJECTED`) | Метрика полезности подсказок |
 | created_at, decided_at | | |
 
-**outbox_events** — задания очистки файлов при удалении (ADR-018): `id`, `type` (`DELETE_PROPERTY_FILES`, `DELETE_USER_FILES`), `payload jsonb`, `status` (`PENDING`,`DONE`,`FAILED`), `attempts`, `next_attempt_at`, `last_error`, `created_at`.
+**outbox_events** — задания очистки файлов при удалении (ADR-018): `id`, `type` (`DELETE_PROPERTY_FILES`, `DELETE_USER_FILES`, `DELETE_PHOTO` — отвязанное фото или фото удалённого черновика), `payload jsonb`, `status` (`PENDING`,`DONE`,`FAILED`), `attempts`, `next_attempt_at`, `last_error`, `created_at`. Обработчик core забирает задания `FOR UPDATE SKIP LOCKED` и повторяет неудачные с удваивающейся задержкой (10 с … 1 ч) до успеха; `FAILED` не используется.
 
 ## 4. База `inspecto_media`
 
