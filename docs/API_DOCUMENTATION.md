@@ -114,8 +114,8 @@
 | GET | `/inspections/{id}/open-defects` | Дефекты, открытые до этого осмотра, с наблюдением в текущем осмотре (если уже сделано) |
 | POST | `/inspections/{id}/observations` | Наблюдение существующего дефекта `{defectId, status: OPEN\|RESOLVED, comment?, severity?}`; одно на дефект в осмотре, иначе `409 ALREADY_OBSERVED` |
 | PATCH | `/observations/{id}` | Изменение наблюдения |
-| POST | `/observations/{id}/photos` | Привязка загруженного фото `{photoId, caption?}` |
-| DELETE | `/observations/{id}/photos/{photoId}` | Отвязка (фото удаляется media через 24 ч) |
+| POST | `/observations/{id}/photos` | Привязка загруженного фото `{photoId, caption?}`; не больше лимита (`400 PHOTO_LIMIT_EXCEEDED`), фото другого наблюдения — `409 RESOURCE_IN_USE` |
+| DELETE | `/observations/{id}/photos/{photoId}` | Отвязка; файлы удаляются заданием очистки через media |
 
 ### Сравнение и подсказки
 
@@ -164,7 +164,7 @@
 
 ## 5. Внутренние API (не публикуются через nginx)
 
-Требуют сервисный токен (аудитория `inspecto-internal`, ADR-007).
+Требуют сервисный токен (аудитория `inspecto-internal`, ADR-007). Сервисы получают его у core по client credentials; core для своих вызовов подписывает токен сам (`sub=core-service`). Права задаёт claim `scope`: `access.check` — проверка доступа в core, `photos.manage` — управление фото в media (core), `photos.read` — чтение фото (report, ml).
 
 | Сервис | Метод | Путь | Вызывающий | Назначение |
 |---|---|---|---|---|
@@ -172,7 +172,8 @@
 | core | GET | `/internal/v1/access/properties/{id}?userId=&action=read\|write` | media, report | Проверка права пользователя на объект |
 | core | GET | `/internal/v1/inspections/{id}/report-data` | report | Агрегат осмотра для отчёта (объект, помещения, чек-лист, дефекты, наблюдения, id фото) |
 | media | GET | `/internal/v1/photos/{id}` | core | Метаданные фото (проверка владельца и объекта) |
-| media | POST | `/internal/v1/photos/{id}/attach` | core | Пометить фото прикреплённым |
+| media | DELETE | `/internal/v1/photos/{id}` | core (outbox) | Удаление отвязанного фото с файлами (идемпотентно) |
+| media | POST | `/internal/v1/photos/{id}/attach` | core | Пометить фото прикреплённым (идемпотентно) |
 | media | GET | `/internal/v1/photos/{id}/content?variant=preview` | report, ml | Байты изображения |
 | media | DELETE | `/internal/v1/photos?propertyId=` / `?ownerId=` | core (outbox) | Массовое удаление |
 | report | DELETE | `/internal/v1/reports?propertyId=` / `?requestedBy=` | core (outbox) | Массовое удаление отчётов |

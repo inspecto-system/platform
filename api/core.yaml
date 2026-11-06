@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto core-service API
-  version: 0.3.1
+  version: 0.4.0
   description: |
     Authentication, users, properties, rooms, dictionaries, inspections, checklists,
     defects, observations, comparison, statistics and ML suggestions.
@@ -1095,6 +1095,13 @@ paths:
       tags: [defects]
       operationId: attachPhoto
       summary: Attach an uploaded photo to an observation
+      description: |
+        The photo must have been uploaded to media-service by the same user for the property of the
+        observation (`400 VALIDATION_ERROR` otherwise). Repeating the request for an already attached
+        photo returns it again. Errors: `400 PHOTO_LIMIT_EXCEEDED` (the observation has the maximum
+        number of photos, see `GET /photos/limits`), `409 RESOURCE_IN_USE` (the photo belongs to another
+        observation), `409 INVALID_STATE_TRANSITION` (completed inspection), `503 DEPENDENCY_UNAVAILABLE`
+        (media-service cannot be reached).
       requestBody:
         required: true
         content:
@@ -1126,7 +1133,11 @@ paths:
     delete:
       tags: [defects]
       operationId: detachPhoto
-      summary: Detach a photo (media-service removes it after 24 h)
+      summary: Detach and delete a photo
+      description: |
+        The photo is removed from the observation at once; its files are deleted by a clean-up job of
+        core-service through media-service, with retries until it succeeds (ADR-018). A completed
+        inspection cannot be changed (`409 INVALID_STATE_TRANSITION`).
       responses:
         '204':
           description: Detached.

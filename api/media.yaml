@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto media-service API
-  version: 0.3.1
+  version: 0.4.0
   description: |
     Upload, validation, compression, storage and delivery of photos (ADR-006).
     External paths are served behind nginx under `/api/v1/photos`; `/internal/v1/**` accepts only service tokens.
@@ -136,6 +136,7 @@ paths:
       tags: [internal]
       operationId: getPhotoMetadata
       summary: Photo metadata (owner, property, status)
+      description: Requires scope `photos.manage` (core-service).
       security:
         - serviceToken: []
       responses:
@@ -147,8 +148,26 @@ paths:
                 $ref: '#/components/schemas/PhotoMetadata'
         '401':
           $ref: 'common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: 'common.yaml#/components/responses/Forbidden'
         '404':
           $ref: 'common.yaml#/components/responses/NotFound'
+    delete:
+      tags: [internal]
+      operationId: deletePhotoInternal
+      summary: Delete a photo with its files (idempotent)
+      description: |
+        Used by the clean-up jobs of core-service when a photo is detached from an observation.
+        Deleting a missing photo succeeds. Requires scope `photos.manage` (core-service).
+      security:
+        - serviceToken: []
+      responses:
+        '204':
+          description: Deleted (or nothing to delete).
+        '401':
+          $ref: 'common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: 'common.yaml#/components/responses/Forbidden'
 
   /internal/v1/photos/{photoId}/attach:
     parameters:
@@ -157,6 +176,9 @@ paths:
       tags: [internal]
       operationId: markPhotoAttached
       summary: Mark a photo as attached (idempotent)
+      description: |
+        Marks the photo as attached, so it is no longer deleted after 24 hours. Repeating the call
+        changes nothing. Requires scope `photos.manage` (core-service).
       security:
         - serviceToken: []
       responses:
@@ -164,6 +186,8 @@ paths:
           description: Attached.
         '401':
           $ref: 'common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: 'common.yaml#/components/responses/Forbidden'
         '404':
           $ref: 'common.yaml#/components/responses/NotFound'
 
@@ -174,6 +198,7 @@ paths:
       tags: [internal]
       operationId: getPhotoContentInternal
       summary: Photo bytes for report-service and ml-service
+      description: Requires scope `photos.read` (report-service, ml-service).
       security:
         - serviceToken: []
       parameters:
@@ -191,6 +216,8 @@ paths:
                 contentMediaType: image/jpeg
         '401':
           $ref: 'common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: 'common.yaml#/components/responses/Forbidden'
         '404':
           $ref: 'common.yaml#/components/responses/NotFound'
 
@@ -199,7 +226,7 @@ paths:
       tags: [internal]
       operationId: deletePhotosInBulk
       summary: Delete all photos of a property or an owner (idempotent)
-      description: Exactly one of `propertyId` or `ownerId` must be given.
+      description: Exactly one of `propertyId` or `ownerId` must be given. Requires scope `photos.manage` (core-service).
       security:
         - serviceToken: []
       parameters:
@@ -218,6 +245,8 @@ paths:
           $ref: 'common.yaml#/components/responses/BadRequest'
         '401':
           $ref: 'common.yaml#/components/responses/Unauthorized'
+        '403':
+          $ref: 'common.yaml#/components/responses/Forbidden'
 
 components:
   parameters:
