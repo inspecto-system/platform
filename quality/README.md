@@ -14,6 +14,7 @@
 |---|---|---|
 | `.github/workflows/java-gradle.yml` | Сборка, Spotless, Checkstyle, PMD, SpotBugs, тесты, JaCoCo | `uses: inspecto-system/platform/.github/workflows/java-gradle.yml@main` |
 | `.github/workflows/go.yml` | golangci-lint, сборка, тесты с `-race`, порог покрытия, govulncheck | `uses: inspecto-system/platform/.github/workflows/go.yml@main` |
+| `.github/workflows/container.yml` | Сборка образа из Dockerfile сервиса, проверка непривилегированного пользователя, Trivy (High/Critical с исправлением блокируют) | `uses: inspecto-system/platform/.github/workflows/container.yml@main` с `image: inspecto/<сервис>` |
 | `.github/workflows/android.yml` | ktlint, detekt, Android Lint, unit-тесты, Kover, `assembleDebug` | `uses: inspecto-system/platform/.github/workflows/android.yml@main` |
 | `.github/workflows/security.yml` | Gitleaks, Dependency Review, CodeQL | `uses: inspecto-system/platform/.github/workflows/security.yml@main` |
 

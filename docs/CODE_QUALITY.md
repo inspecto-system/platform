@@ -38,7 +38,7 @@
 
 ## 3. Единые правила для всех репозиториев
 
-- Переиспользуемые workflow GitHub Actions лежат в `platform/.github/workflows/` (`java-gradle.yml`, `go.yml`, `security.yml`; `workflow_call`) и подключаются из сервисных репозиториев одной строкой; общие конфигурации линтеров — в `platform/quality/` (см. `quality/README.md`).
+- Переиспользуемые workflow GitHub Actions лежат в `platform/.github/workflows/` (`java-gradle.yml`, `go.yml`, `security.yml`, `container.yml`; `workflow_call`) и подключаются из сервисных репозиториев одной строкой; общие конфигурации линтеров — в `platform/quality/` (см. `quality/README.md`).
 - Версии инструментов закреплены (не `latest`); действия GitHub Actions закреплены по SHA коммита.
 - Кеширование зависимостей (Gradle, Go modules, npm, pip) обязательно; запуск только по изменённым путям там, где это безопасно.
 - Защита ветки `main`: только через PR, обязательные проверки CI, запрет force push (ADR-021).

@@ -1,0 +1,46 @@
+# Reusable workflow: builds the service image from its Dockerfile and scans it with Trivy.
+# Blocks on HIGH/CRITICAL vulnerabilities that have a fix (SECURITY.md §11).
+name: container
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: Local image name, for example inspecto/core-service.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: Build and scan image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ${{ inputs.image }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Runs as a non-root user
+        run: |
+          user=$(docker image inspect --format '{{.Config.User}}' "${{ inputs.image }}:ci")
+          echo "Image user: ${user:-root}"
+          test -n "$user" && test "$user" != "root" && test "$user" != "0"
+      - name: Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ inputs.image }}:ci
+          version: v0.76.2
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
