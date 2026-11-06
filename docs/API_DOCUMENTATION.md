@@ -14,7 +14,7 @@
 | Пагинация | `?page=0&size=20` (максимум 100); ответ `{ "items": [...], "page": 0, "size": 20, "total": 57 }` |
 | Оптимистическая блокировка | Поле `version` в теле `PATCH`; при несовпадении — `409 VERSION_CONFLICT` |
 | Трассировка | Заголовок `X-Request-Id` (принимается или генерируется, возвращается в ответе и в ошибках) |
-| Идемпотентность | `POST /photos` и `POST /reports` принимают `Idempotency-Key` (повтор с тем же ключом возвращает исходный результат) |
+| Идемпотентность | `POST /photos`, `POST /reports` и `POST /inspections/{id}/defects` принимают `Idempotency-Key` (повтор с тем же ключом возвращает исходный результат) |
 | Локализация | Ответы содержат коды; тексты для пользователя формирует клиент (ADR-019). Названия справочников — по `Accept-Language` |
 
 ### Формат ошибок (RFC 9457)
@@ -107,7 +107,7 @@
 | Метод | Путь | Назначение |
 |---|---|---|
 | GET | `/properties/{id}/defects?status=OPEN&roomId&severity` | Дефекты объекта |
-| POST | `/inspections/{id}/defects` | Новый дефект с первым наблюдением `{roomId, checklistItemId?, categoryId, elementGroup, title, description?, severity, suggestionId?}` → `201` |
+| POST | `/inspections/{id}/defects` | Новый дефект с первым наблюдением `{roomId, checklistItemId?, categoryId, elementGroup, title, description?, severity, suggestionId?}`, заголовок `Idempotency-Key` (повтор возвращает созданный дефект) → `201` |
 | GET | `/defects/{id}` | Дефект с наблюдениями и фото |
 | PATCH | `/defects/{id}` | Категория, описание, серьёзность |
 | GET | `/defects/{id}/history` | История статусов |
