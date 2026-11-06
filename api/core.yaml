@@ -1314,6 +1314,10 @@ paths:
       tags: [internal]
       operationId: getReportData
       summary: Inspection aggregate for the PDF report
+      description: |
+        Requires scope `reports.data` (report-service). The user is not checked here: report-service checks
+        access with `GET /internal/v1/access/properties/{id}` first. `comparison` compares the inspection
+        with the previous one of the property (by `inspectedAt`), as `GET /inspections/compare` does.
       security:
         - serviceToken: []
       parameters:
