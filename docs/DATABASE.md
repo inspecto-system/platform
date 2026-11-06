@@ -179,6 +179,8 @@
 
 **defect_status_history**: `id`, `defect_id` FK ON DELETE CASCADE, `from_status NULL`, `to_status`, `inspection_id NULL`, `changed_by`, `changed_at`, `comment`. Append-only.
 
+**defect_idempotency_keys** (core V8, T-308): `id`, `user_id` FK ON DELETE CASCADE, `key text` (8–64 символа), `defect_id` FK ON DELETE CASCADE, `created_at`. `UNIQUE (user_id, key)` — `Idempotency-Key` из `POST /inspections/{id}/defects`: повтор с тем же ключом возвращает созданный дефект. Одновременные повторы упорядочиваются блокировкой `pg_advisory_xact_lock` по ключу.
+
 ### 3.6. ML и служебные таблицы
 
 #### ml_suggestions

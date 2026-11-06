@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto core-service API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Authentication, users, properties, rooms, dictionaries, inspections, checklists,
     defects, observations, comparison, statistics and ML suggestions.
@@ -908,6 +908,10 @@ paths:
         the category must be active and visible to the user, the checklist item (if given) must be an item of
         this inspection in the same room; otherwise `400 VALIDATION_ERROR`. A completed inspection cannot be
         changed (`409 INVALID_STATE_TRANSITION`).
+        A repeated request with the same `Idempotency-Key` from the same user returns the defect created by the
+        first one (`201`, current state) without creating another; offline clients send the key with every retry.
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
