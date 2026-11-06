@@ -58,7 +58,7 @@
 | GET | `/users/me` | Профиль | `200` |
 | PATCH | `/users/me` | `{fullName, locale, version}` | `200` |
 | POST | `/users/me/password` | Смена пароля `{currentPassword, newPassword}`; отзывает все сессии | `204` |
-| DELETE | `/users/me` | Удаление аккаунта и всех данных, требует `{password}` | `202` (очистка файлов асинхронно) |
+| DELETE | `/users/me` | Удаление аккаунта и всех данных, требует `{password}`; неверный пароль — `400 VALIDATION_ERROR` (поле `password`) | `202` (очистка файлов асинхронно) |
 | GET | `/.well-known/jwks.json` | Открытые ключи для проверки JWT | `200` JWKS |
 
 Требования к паролю: ≥ 10 символов, не из списка распространённых паролей.
@@ -76,7 +76,7 @@
 | GET | `/properties/{id}/rooms` | Помещения |
 | POST | `/properties/{id}/rooms` | `{name, roomType, sortOrder?}` |
 | PATCH/DELETE | `/rooms/{id}` | Изменение / удаление (запрещено, если помещение есть в осмотрах или у него есть дефекты, → `409 RESOURCE_IN_USE`) |
-| GET | `/properties/{id}/statistics` | Распределение дефектов по категориям, серьёзности, статусам и осмотрам |
+| GET | `/properties/{id}/statistics` | Всего / открыто / устранено; открытые дефекты по серьёзности, категориям и помещениям; число открытых на момент каждого осмотра |
 
 ### Справочники
 
@@ -121,7 +121,7 @@
 
 | Метод | Путь | Назначение |
 |---|---|---|
-| GET | `/inspections/compare?base={a}&target={b}` | Сравнение двух осмотров одного объекта (ADR-004) |
+| GET | `/inspections/compare?base={a}&target={b}` | Сравнение двух осмотров одного объекта по состояниям «на момент A» и «на момент B» (ADR-004); A должен быть раньше B |
 | POST | `/category-suggestions` | Подсказка категории по фото `{photoId}` → `200 {suggestionId, modelVersion, items:[{categoryId, code, name, probability}]}` или `200 {items: []}` при недоступности ML |
 
 Пример ответа сравнения:
