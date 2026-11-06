@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto core-service API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     Authentication, users, properties, rooms, dictionaries, inspections, checklists,
     defects, observations, comparison, statistics and ML suggestions.
@@ -191,7 +191,10 @@ paths:
       tags: [users]
       operationId: deleteCurrentUser
       summary: Delete the account and all its data
-      description: Data is deleted transactionally; files are removed asynchronously (ADR-018).
+      description: |
+        Data of the account (properties, inspections, defects, own categories, sessions) is deleted in one
+        transaction; photos and reports are removed by clean-up jobs afterwards (ADR-018). A wrong password is
+        rejected with `400 VALIDATION_ERROR` (field `password`, code `INVALID`), as when changing the password.
       requestBody:
         required: true
         content:
@@ -201,6 +204,8 @@ paths:
       responses:
         '202':
           description: Account deleted; file clean-up scheduled.
+        '400':
+          $ref: 'common.yaml#/components/responses/BadRequest'
         '401':
           $ref: 'common.yaml#/components/responses/Unauthorized'
 
@@ -462,6 +467,13 @@ paths:
       tags: [comparison]
       operationId: getPropertyStatistics
       summary: Defect statistics of a property
+      description: |
+        Totals count every defect of the property by its current status. `bySeverity`, `byCategory` and
+        `byRoom` count the defects that are open now, largest group first; `label` is the name in the language
+        of `Accept-Language` (category and room names as stored). `byInspection` lists every inspection in
+        chronological order with the number of defects open as of it (latest observation in it or earlier).
+      parameters:
+        - $ref: 'common.yaml#/components/parameters/AcceptLanguage'
       responses:
         '200':
           description: Statistics.
@@ -1157,6 +1169,22 @@ paths:
       tags: [comparison]
       operationId: compareInspections
       summary: Compare two inspections of the same property (ADR-004)
+      description: |
+        Each defect of the property gets its status as of A and as of B: the status of its latest observation in
+        that inspection or an earlier one (by `inspectedAt`). "Checked in B" means an observation in B itself.
+        Defects are classified as follows (ADR-004):
+
+        | As of A | As of B | Checked in B | State |
+        |---|---|---|---|
+        | OPEN | RESOLVED | any | `RESOLVED` |
+        | none | RESOLVED | any | `RESOLVED` (found and resolved after A) |
+        | OPEN | OPEN | yes | `REMAINING` |
+        | none or RESOLVED | OPEN | yes | `NEW` (`reopened` when RESOLVED as of A) |
+        | any | OPEN | no | `NOT_CHECKED` |
+
+        Defects RESOLVED as of both, or without observations up to B, are not listed. Inspections of any status
+        can be compared. `400 VALIDATION_ERROR` when the inspections belong to different properties or A is not
+        earlier than B (`inspectedAt`); `404` when either is not visible to the user.
       parameters:
         - name: base
           in: query
@@ -2219,6 +2247,19 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CategoryStateCounts'
+    InspectionDefectCount:
+      type: object
+      required: [inspectionId, inspectedAt, status, openDefects]
+      properties:
+        inspectionId:
+          $ref: 'common.yaml#/components/schemas/Uuid'
+        inspectedAt:
+          $ref: 'common.yaml#/components/schemas/Timestamp'
+        status:
+          $ref: 'common.yaml#/components/schemas/InspectionStatus'
+        openDefects:
+          type: integer
+          minimum: 0
     CountByKey:
       type: object
       required: [key, count]
@@ -2259,7 +2300,7 @@ components:
           type: array
           description: Open defects per inspection, chronological.
           items:
-            type: object
+            $ref: '#/components/schemas/InspectionDefectCount'
             required: [inspectionId, inspectedAt, openDefects, newDefects, resolvedDefects]
             properties:
               inspectionId:
