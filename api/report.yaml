@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto report-service API
-  version: 0.5.0
+  version: 0.5.1
   description: |
     Asynchronous PDF report generation (ADR-011, ADR-012).
     External paths are served behind nginx under `/api/v1/reports`; `/internal/v1/**` accepts only service tokens.
@@ -136,7 +136,7 @@ paths:
       tags: [internal]
       operationId: deleteReportsInBulk
       summary: Delete all reports of a property or of a requesting user (idempotent)
-      description: Exactly one of `propertyId` or `requestedBy` must be given.
+      description: Exactly one of `propertyId` or `requestedBy` must be given. Requires scope `reports.manage` (core-service, clean-up jobs of ADR-018).
       security:
         - serviceToken: []
       parameters:

@@ -164,7 +164,7 @@
 
 ## 5. Внутренние API (не публикуются через nginx)
 
-Требуют сервисный токен (аудитория `inspecto-internal`, ADR-007). Сервисы получают его у core по client credentials; core для своих вызовов подписывает токен сам (`sub=core-service`). Права задаёт claim `scope`: `access.check` — проверка доступа в core, `reports.data` — данные отчёта в core (report), `photos.manage` — управление фото в media (core), `photos.read` — чтение фото (report, ml).
+Требуют сервисный токен (аудитория `inspecto-internal`, ADR-007). Сервисы получают его у core по client credentials; core для своих вызовов подписывает токен сам (`sub=core-service`). Права задаёт claim `scope`: `access.check` — проверка доступа в core, `reports.data` — данные отчёта в core (report), `photos.manage` — управление фото в media (core), `reports.manage` — удаление отчётов в report (core), `photos.read` — чтение фото (report, ml).
 
 | Сервис | Метод | Путь | Вызывающий | Назначение |
 |---|---|---|---|---|
