@@ -4,3 +4,5 @@ docs/architecture/out/*.html
 .idea/
 .vscode/
 .env
+deploy/backups/
+deploy/backup.key
