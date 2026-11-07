@@ -1,0 +1,51 @@
+name: backup
+
+# T-507: a backup restores into a clean compose stack (deploy/backup/verify.sh).
+on:
+  schedule:
+    - cron: "47 4 * * 1" # weekly: the services change, the backup has to keep up
+  workflow_dispatch:
+  pull_request:
+    paths: ["deploy/**", ".github/workflows/backup.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    name: Backup and restore on a clean stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      COMPOSE: docker compose -f platform/deploy/compose.dev.yaml --env-file platform/deploy/.env --profile apps
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: platform
+      # The compose file builds the services from sibling clones.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: inspecto-system/core-service
+          path: core-service
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: inspecto-system/media-service
+          path: media-service
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: inspecto-system/report-service
+          path: report-service
+      - name: Start services
+        run: |
+          cp platform/deploy/.env.example platform/deploy/.env
+          $COMPOSE up -d --build --wait --wait-timeout 600
+      - name: Backup, wipe, restore, compare
+        env:
+          VERIFY_DESTROYS_DATA: "yes"
+        run: sh platform/deploy/backup/verify.sh
+      - name: Logs on failure
+        if: failure()
+        run: $COMPOSE logs --no-color core media report
+      - name: Stop
+        if: always()
+        run: $COMPOSE down -v
