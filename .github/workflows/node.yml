@@ -1,0 +1,53 @@
+# Reusable workflow: the checks of CODE_QUALITY.md §2 for the web app (TypeScript): Prettier, ESLint,
+# tsc (strict), Vitest with coverage thresholds of the project, next build, and optionally Playwright.
+# The repository defines the npm scripts format:check, lint, typecheck, test:coverage, build, test:e2e.
+name: node
+
+on:
+  workflow_call:
+    inputs:
+      node-version-file:
+        description: File with the Node.js version (.nvmrc).
+        type: string
+        default: .nvmrc
+      e2e:
+        description: Run Playwright (npm run test:e2e) in Chromium after the build.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Format, lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: npm
+      - name: Install (lockfile only, no install scripts of dependencies)
+        run: npm ci --ignore-scripts
+      - name: Format
+        run: npm run format:check
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests with coverage thresholds
+        run: npm run test:coverage
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      - name: Playwright browsers
+        if: inputs.e2e
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end tests
+        if: inputs.e2e
+        run: npm run test:e2e
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
