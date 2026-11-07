@@ -1,8 +1,7 @@
-# Security headers of every response (SECURITY.md §10). Included wherever a location adds its own
+# Security headers of every API response (SECURITY.md §10). Included wherever a location adds its own
 # headers: nginx drops inherited add_header directives in a block that has any of its own.
-add_header Strict-Transport-Security "max-age=${NGINX_HSTS_MAX_AGE}; includeSubDomains" always;
+include /etc/nginx/conf.d/common-headers.inc;
 add_header X-Content-Type-Options "nosniff" always;
 add_header Referrer-Policy "no-referrer" always;
-add_header X-Frame-Options "DENY" always;
 # The API returns only JSON and files: nothing in it may load or run anything. The web app sets its own policy.
 add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" always;

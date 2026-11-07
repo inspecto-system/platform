@@ -37,6 +37,10 @@ jobs:
         with:
           repository: inspecto-system/report-service
           path: report-service
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: inspecto-system/web
+          path: web
       - name: Start services
         run: |
           cp platform/deploy/.env.example platform/deploy/.env
@@ -45,7 +49,7 @@ jobs:
         run: sh platform/deploy/e2e/run.sh
       - name: Logs on failure
         if: failure()
-        run: $COMPOSE logs --no-color core media report nginx
+        run: $COMPOSE logs --no-color core media report web nginx
       - name: Stop
         if: always()
         run: $COMPOSE down -v

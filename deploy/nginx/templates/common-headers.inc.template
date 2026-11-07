@@ -1,0 +1,5 @@
+# Headers of every response, the web app included (SECURITY.md §10). The web app sets its own CSP,
+# Referrer-Policy, nosniff and Permissions-Policy (web/src/proxy.ts); the API gets them from
+# security-headers.inc.
+add_header Strict-Transport-Security "max-age=${NGINX_HSTS_MAX_AGE}; includeSubDomains" always;
+add_header X-Frame-Options "DENY" always;
