@@ -45,7 +45,7 @@ jobs:
         run: sh platform/deploy/e2e/run.sh
       - name: Logs on failure
         if: failure()
-        run: $COMPOSE logs --no-color core media report
+        run: $COMPOSE logs --no-color core media report nginx
       - name: Stop
         if: always()
         run: $COMPOSE down -v

@@ -1,0 +1,107 @@
+# Entry point of Inspecto (ADR-013, T-505): TLS, routing by resource, security headers, rate limits
+# and body limits (SECURITY.md §2, §5, §10). Rendered by the nginx image from environment variables
+# (NGINX_HTTPS_PORT, NGINX_HSTS_MAX_AGE); nginx's own variables are left as they are.
+
+server_tokens off;
+
+# JSON access log without headers or bodies: tokens and cookies never reach the log.
+log_format inspecto escape=json
+  '{"@timestamp":"$time_iso8601","service.name":"nginx","http.request.method":"$request_method",'
+  '"url.path":"$uri","http.response.status_code":$status,"http.response.body.bytes":$body_bytes_sent,'
+  '"event.duration_s":$request_time,"client.ip":"$remote_addr","trace.id":"$request_id"}';
+# Used by both servers below; a server-level access_log replaces the default one of nginx.conf.
+
+# Sign-in and registration: 5 requests a minute per IP (SECURITY.md §2); the rest of the API: 20 a second.
+limit_req_zone $binary_remote_addr zone=auth:10m rate=5r/m;
+limit_req_zone $binary_remote_addr zone=api:10m rate=20r/s;
+limit_req_status 429;
+
+upstream core { server core:8081; }
+upstream media { server media:8082; }
+upstream report { server report:8083; }
+
+server {
+  listen 80;
+  access_log /dev/stdout inspecto;
+  # Plain HTTP only redirects to HTTPS.
+  location / { return 301 https://$host:${NGINX_HTTPS_PORT}$request_uri; }
+}
+
+server {
+  listen 443 ssl;
+  access_log /dev/stdout inspecto;
+  http2 on;
+
+  ssl_certificate /etc/nginx/certs/server.crt;
+  ssl_certificate_key /etc/nginx/certs/server.key;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_prefer_server_ciphers off;
+  ssl_session_cache shared:TLS:10m;
+  ssl_session_tickets off;
+
+  # Small JSON bodies by default; photos have their own limit below.
+  client_max_body_size 1m;
+  client_body_timeout 30s;
+
+  # Headers of every response, including errors ("always").
+  include /etc/nginx/conf.d/security-headers.inc;
+
+  proxy_http_version 1.1;
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-For $remote_addr;
+  proxy_set_header X-Forwarded-Proto https;
+  # One id per request through all services (ADR-010); an id sent by the client is not trusted.
+  proxy_set_header X-Request-Id $request_id;
+  proxy_hide_header X-Powered-By;
+  proxy_connect_timeout 5s;
+  proxy_read_timeout 60s;
+
+  error_page 413 = @too_large;
+  error_page 429 = @rate_limited;
+  error_page 502 503 504 = @unavailable;
+
+  location = /api/v1/auth/login { limit_req zone=auth burst=4 nodelay; proxy_pass http://core; }
+  location = /api/v1/auth/register { limit_req zone=auth burst=4 nodelay; proxy_pass http://core; }
+
+  location /api/v1/photos {
+    limit_req zone=api burst=40 nodelay;
+    # media-service accepts files up to 15 MiB (MEDIA_MAX_FILE_SIZE_BYTES) plus the multipart envelope.
+    client_max_body_size 16m;
+    proxy_request_buffering off;
+    proxy_pass http://media;
+  }
+
+  location /api/v1/reports {
+    limit_req zone=api burst=40 nodelay;
+    proxy_pass http://report;
+  }
+
+  location /api/v1/ {
+    limit_req zone=api burst=40 nodelay;
+    proxy_pass http://core;
+  }
+
+  # Service-to-service endpoints (/internal/**), actuators and anything else are not published (ADR-013).
+  location / {
+    default_type application/problem+json;
+    return 404 '{"type":"https://inspecto.dev/problems/not-found","title":"Not Found","status":404,"code":"NOT_FOUND","requestId":"$request_id"}';
+  }
+
+  location @too_large {
+    default_type application/problem+json;
+    return 413 '{"type":"https://inspecto.dev/problems/image-too-large","title":"Payload Too Large","status":413,"code":"IMAGE_TOO_LARGE","requestId":"$request_id"}';
+  }
+
+  location @rate_limited {
+    default_type application/problem+json;
+    include /etc/nginx/conf.d/security-headers.inc;
+    add_header Retry-After 60 always;
+    return 429 '{"type":"https://inspecto.dev/problems/rate-limited","title":"Too Many Requests","status":429,"code":"RATE_LIMITED","requestId":"$request_id"}';
+  }
+
+  location @unavailable {
+    default_type application/problem+json;
+    return 503 '{"type":"https://inspecto.dev/problems/dependency-unavailable","title":"Service Unavailable","status":503,"code":"DEPENDENCY_UNAVAILABLE","requestId":"$request_id"}';
+  }
+}

@@ -1,6 +1,8 @@
 #!/bin/sh
 # Runs the CP2 scenario in a throw-away container on the compose network, so it reaches core, media
-# and report by their service names, the same way locally and in CI. Start the services first:
+# and report by their service names, the same way locally and in CI; nginx.sh then checks the entry
+# point (nginx). cp2.sh does not go through nginx: its many sign-ins from one IP would hit the sign-in
+# rate limit that nginx.sh verifies. Start the services first:
 #   docker compose -f deploy/compose.dev.yaml --env-file deploy/.env --profile apps up -d --build --wait
 # Then checks from outside that nothing of the deleted property and of the deleted account is left
 # in the databases and in SeaweedFS (T-303): the API alone cannot prove it.
@@ -10,7 +12,7 @@ log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 
 docker run --rm --network inspecto-dev_services -v "$here:/e2e:ro" alpine:3.22.8 \
-  sh -c 'apk add --no-cache curl jq > /dev/null && sh /e2e/cp2.sh' > "$log" 2>&1 || { cat "$log"; exit 1; }
+  sh -c 'apk add --no-cache curl jq > /dev/null && sh /e2e/cp2.sh && sh /e2e/nginx.sh' > "$log" 2>&1 || { cat "$log"; exit 1; }
 cat "$log"
 
 cleanup="$(grep '^CLEANUP ' "$log")" || { echo "FAILED: the scenario printed no CLEANUP line" >&2; exit 1; }

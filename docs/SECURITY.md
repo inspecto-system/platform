@@ -93,8 +93,8 @@
 |---|---|
 | HTTPS | TLS 1.2+ (предпочтительно 1.3), редирект с HTTP; в разработке — самоподписанный сертификат |
 | HSTS | `max-age=31536000; includeSubDomains` |
-| CSP | `default-src 'self'; img-src 'self' blob: data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'` (уточняется при реализации Web) |
-| Прочие заголовки | `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy: camera=(), geolocation=()` для Web |
+| CSP | API (nginx): `default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'`. Web: `default-src 'self'; img-src 'self' blob: data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'` (уточняется при реализации Web) |
+| Прочие заголовки | `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY` (nginx, все ответы), `Permissions-Policy: camera=(), geolocation=()` для Web |
 | CORS | Разрешён только origin веб-приложения; без `*`; `Access-Control-Allow-Credentials` только для `/api/v1/auth/**` |
 | Android | `usesCleartextTraffic=false`, токены в DataStore с ключом Android Keystore, `allowBackup=false` для данных с токенами, без логирования тел запросов в release-сборке |
 
