@@ -97,7 +97,9 @@ services:
       retries: 30
 
   s3-init:
-    # One-shot job: creates the buckets (idempotent).
+    # One-shot job: creates the buckets (idempotent). The filer may still be starting when S3 is
+    # healthy, and "weed shell" reports a failed create only in its output: retry until the bucket is
+    # listed, otherwise the services get AccessDenied for a missing bucket.
     image: chrislusf/seaweedfs:4.52
     depends_on:
       s3:
@@ -106,9 +108,16 @@ services:
     command:
       - |
         for bucket in photos reports; do
-          echo "s3.bucket.create -name $$bucket" | weed shell -master=s3:9333 || true
+          for attempt in $$(seq 1 30); do
+            echo "s3.bucket.create -name $$bucket" | weed shell -master=s3:9333 > /dev/null 2>&1 || true
+            if echo "s3.bucket.list" | weed shell -master=s3:9333 2>/dev/null | grep -q "^ *$$bucket[[:space:]]"; then
+              echo "bucket $$bucket ready"
+              break
+            fi
+            if [ "$$attempt" = 30 ]; then echo "bucket $$bucket was not created" >&2; exit 1; fi
+            sleep 2
+          done
         done
-        echo "s3.bucket.list" | weed shell -master=s3:9333
     networks: [data]
 
   gotenberg:
