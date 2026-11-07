@@ -19,6 +19,7 @@ limit_req_status 429;
 upstream core { server core:8081; }
 upstream media { server media:8082; }
 upstream report { server report:8083; }
+upstream web { server web:3000; }
 
 server {
   listen 80;
@@ -82,10 +83,15 @@ server {
     proxy_pass http://core;
   }
 
-  # Service-to-service endpoints (/internal/**), actuators and anything else are not published (ADR-013).
+  # Service-to-service endpoints (/internal/**) and actuators are not published (ADR-013).
+  location ^~ /internal/ { return 404 '{"type":"https://inspecto.dev/problems/not-found","title":"Not Found","status":404,"code":"NOT_FOUND","requestId":"$request_id"}'; default_type application/problem+json; }
+  location ^~ /actuator { return 404 '{"type":"https://inspecto.dev/problems/not-found","title":"Not Found","status":404,"code":"NOT_FOUND","requestId":"$request_id"}'; default_type application/problem+json; }
+
+  # Everything else is the web app (T-501), which sets its own CSP with a nonce per page.
   location / {
-    default_type application/problem+json;
-    return 404 '{"type":"https://inspecto.dev/problems/not-found","title":"Not Found","status":404,"code":"NOT_FOUND","requestId":"$request_id"}';
+    include /etc/nginx/conf.d/common-headers.inc;
+    limit_req zone=api burst=40 nodelay;
+    proxy_pass http://web;
   }
 
   location @too_large {

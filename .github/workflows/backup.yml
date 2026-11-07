@@ -35,6 +35,10 @@ jobs:
         with:
           repository: inspecto-system/report-service
           path: report-service
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: inspecto-system/web
+          path: web
       - name: Start services
         run: |
           cp platform/deploy/.env.example platform/deploy/.env

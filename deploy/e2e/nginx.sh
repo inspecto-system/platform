@@ -60,6 +60,16 @@ call GET "$BASE/reports?inspectionId=$(cat /proc/sys/kernel/random/uuid)" -H "Au
 [ -n "$(header X-Request-Id)" ] || fail "no X-Request-Id in the answer"
 ok "properties (core), photo limits (media), reports (report) through one host"
 
+step "Web app on the same host with its own nonce-based CSP"
+call GET "https://$HOST/"
+expect 200
+grep -qi '^content-type: text/html' /tmp/ngx-headers || fail "/ is not the web app"
+[ "$(grep -ci '^content-security-policy:' /tmp/ngx-headers)" = 1 ] || fail "the web app must get exactly one CSP (its own)"
+case "$(header Content-Security-Policy)" in *"'nonce-"*"'strict-dynamic'"*) ;; *) fail "web CSP: $(header Content-Security-Policy)" ;; esac
+case "$(header Strict-Transport-Security)" in max-age=*) ;; *) fail "web page without HSTS" ;; esac
+grep -q 'Inspecto' /tmp/ngx-body || fail "web page has no title"
+ok "/ is the web app: one CSP with a nonce, HSTS from nginx"
+
 step "Internal endpoints and actuators are not published (ADR-013)"
 for path in /internal/v1/reports /internal/v1/access/properties/x /actuator/health /health/ready; do
   call GET "https://$HOST$path"
