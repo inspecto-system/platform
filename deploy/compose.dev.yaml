@@ -11,21 +11,30 @@ name: inspecto-dev
 
 services:
   certs:
-    # One-shot job: self-signed TLS certificate for PostgreSQL (development only).
+    # One-shot job: self-signed TLS certificates for PostgreSQL and nginx (development only).
     image: alpine:3.22
     command:
       - sh
       - -ec
       - |
-        if [ -f /certs/server.crt ]; then echo "certificate exists"; exit 0; fi
         apk add --no-cache openssl >/dev/null
-        openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
-          -subj "/CN=postgres" -addext "subjectAltName=DNS:postgres,DNS:localhost,IP:127.0.0.1" \
-          -keyout /certs/server.key -out /certs/server.crt
-        chown 70:70 /certs/server.key /certs/server.crt
-        chmod 600 /certs/server.key
+        if [ ! -f /certs/server.crt ]; then
+          openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+            -subj "/CN=postgres" -addext "subjectAltName=DNS:postgres,DNS:localhost,IP:127.0.0.1" \
+            -keyout /certs/server.key -out /certs/server.crt
+          chown 70:70 /certs/server.key /certs/server.crt
+          chmod 600 /certs/server.key
+        fi
+        # nginx: the developer's computer as seen from the browser and from the Android emulator (10.0.2.2).
+        if [ ! -f /nginx-certs/server.crt ]; then
+          openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+            -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,DNS:nginx,IP:127.0.0.1,IP:10.0.2.2" \
+            -keyout /nginx-certs/server.key -out /nginx-certs/server.crt
+          chmod 600 /nginx-certs/server.key
+        fi
     volumes:
       - pg-certs:/certs
+      - nginx-certs:/nginx-certs
 
   postgres:
     image: postgres:16-alpine
@@ -218,13 +227,45 @@ services:
     # The only service in "render": Gotenberg is reachable from report-service alone.
     networks: [data, services, render]
 
+  nginx:
+    # Single entry point (ADR-013, T-505): https://localhost:8443/api/v1/... (port NGINX_HTTPS_PORT).
+    profiles: [apps]
+    image: nginx:1.30.6-alpine
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+      core:
+        condition: service_healthy
+      media:
+        condition: service_healthy
+      report:
+        condition: service_healthy
+    # The image's default site would answer plain HTTP for "localhost": only the rendered templates stay.
+    entrypoint: ["/bin/sh", "-c", "rm -f /etc/nginx/conf.d/default.conf && exec /docker-entrypoint.sh nginx -g 'daemon off;'"]
+    environment:
+      NGINX_HTTPS_PORT: ${NGINX_HTTPS_PORT:-8443}
+      NGINX_HSTS_MAX_AGE: ${NGINX_HSTS_MAX_AGE:-31536000}
+    volumes:
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - nginx-certs:/etc/nginx/certs:ro
+    ports:
+      - "127.0.0.1:${NGINX_HTTP_PORT:-8080}:80"
+      - "127.0.0.1:${NGINX_HTTPS_PORT:-8443}:443"
+    networks: [services]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null --no-check-certificate https://127.0.0.1/api/v1/.well-known/jwks.json"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
 networks:
   data: {}
   render: {}
-  # core, media and report talk to each other here; nginx joins it in T-505.
+  # core, media, report and nginx talk to each other here.
   services: {}
 
 volumes:
   pg-data: {}
   pg-certs: {}
+  nginx-certs: {}
   s3-data: {}
