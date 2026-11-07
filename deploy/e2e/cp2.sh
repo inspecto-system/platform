@@ -9,6 +9,7 @@ set -eu
 
 CORE="${CORE_URL:-http://core:8081}/api/v1"
 MEDIA="${MEDIA_URL:-http://media:8082}/api/v1"
+REPORT="${REPORT_URL:-http://report:8083}/api/v1"
 PHOTO="${PHOTO:-$(dirname "$0")/room.jpg}"
 RUN="$(date +%s)-$$"
 
@@ -28,6 +29,37 @@ status() { cat /tmp/e2e-status; }
 # Bodies are cut short: they may hold the throw-away tokens of the test users.
 expect() { [ "$(status)" = "$1" ] || fail "expected HTTP $1, got $(status): $(head -c 300 /tmp/e2e-body)"; }
 json() { request "$1" "$2" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' ${3:+-d "$3"}; }
+
+# finish INSPECTION — moves the inspection to COMPLETED from DRAFT or IN_PROGRESS.
+finish() {
+  current=$(json GET "$CORE/inspections/$1")
+  if [ "$(echo "$current" | jq -r .status)" = DRAFT ]; then
+    current=$(json PATCH "$CORE/inspections/$1" "{\"status\":\"IN_PROGRESS\",\"version\":$(echo "$current" | jq .version)}")
+    expect 200
+  fi
+  json POST "$CORE/inspections/$1/complete" "{\"version\":$(echo "$current" | jq .version)}" > /dev/null
+  expect 200
+}
+
+# report_pdf INSPECTION — orders a report, waits until it is ready (every 2 s, up to 60 s, as the
+# contract says), downloads it and prints the report id; fails unless the file is a PDF.
+report_pdf() {
+  id=$(json POST "$REPORT/reports" "{\"inspectionId\":\"$1\",\"locale\":\"ru\"}" | jq -r .id)
+  expect 202
+  for _ in $(seq 1 30); do
+    state=$(json GET "$REPORT/reports/$id" | jq -r .status)
+    case "$state" in
+      DONE) break ;;
+      FAILED) fail "report $id failed: $(head -c 300 /tmp/e2e-body)" ;;
+    esac
+    sleep 2
+  done
+  [ "$state" = DONE ] || fail "report $id is not ready after 60 s (status $state)"
+  request GET "$REPORT/reports/$id/file" -H "Authorization: Bearer $TOKEN" > /dev/null
+  expect 200
+  [ "$(head -c 5 /tmp/e2e-body)" = "%PDF-" ] || fail "report $id is not a PDF"
+  echo "$id"
+}
 
 step "Registration and sign-in"
 EMAIL="cp2-$RUN@example.com"
@@ -114,6 +146,19 @@ expect 201
   || fail "status history is wrong"
 ok "defect RESOLVED, history OPEN -> RESOLVED"
 
+step "PDF report of the completed inspection (T-402)"
+# The repeat inspection is reported: the first one stays open, later steps change its photos.
+json POST "$REPORT/reports" "{\"inspectionId\":\"$REPEAT\"}" > /dev/null
+expect 409
+finish "$REPEAT"
+REPORT_ID=$(report_pdf "$REPEAT")
+SIZE=$(wc -c < /tmp/e2e-body)
+request GET "$REPORT/reports/$REPORT_ID" -H "Authorization: Bearer $OTHER" > /dev/null
+expect 404
+request GET "$REPORT/reports/$REPORT_ID/file" -H "Authorization: Bearer $OTHER" > /dev/null
+expect 404
+ok "report $REPORT_ID downloaded ($SIZE bytes of PDF); refused before completion (409) and to another user (404)"
+
 # wait_gone PHOTO — waits until the outbox job of core has deleted the photo in media (up to 60 s).
 wait_gone() {
   for _ in $(seq 1 30); do
@@ -141,6 +186,7 @@ request GET "$CORE/properties/$PROPERTY" -H "Authorization: Bearer $TOKEN" > /de
 expect 404
 wait_gone "$SECOND"
 ok "property and its photo deleted"
+DELETED_PROPERTY="$PROPERTY"
 
 step "Deleting the account deletes all its data (T-303)"
 ACCOUNT_EMAIL="cp2-account-$RUN@example.com"
@@ -165,6 +211,8 @@ LAST=$(request POST "$MEDIA/photos" -H "Authorization: Bearer $TOKEN" -F "proper
 expect 201
 json POST "$CORE/observations/$OBSERVATION/photos" "{\"photoId\":\"$LAST\"}" > /dev/null
 expect 201
+finish "$INSPECTION"
+report_pdf "$INSPECTION" > /dev/null
 json DELETE "$CORE/users/me" '{"password":"Wrong-Password-1"}' > /dev/null
 expect 400
 json DELETE "$CORE/users/me" "{\"password\":\"$PASSWORD\"}" > /dev/null
@@ -175,6 +223,6 @@ expect 401
 ok "account $OWNER deleted; it cannot sign in"
 # run.sh checks the databases and SeaweedFS from outside the network: the photo is no longer
 # readable through the API right away (core denies access), so only storage proves the clean-up.
-printf 'CLEANUP owner=%s property=%s\n' "$OWNER" "$PROPERTY"
+printf 'CLEANUP owner=%s property=%s deleted=%s\n' "$OWNER" "$PROPERTY" "$DELETED_PROPERTY"
 
 printf '\nCP2 scenario passed.\n'

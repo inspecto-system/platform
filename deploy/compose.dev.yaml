@@ -6,7 +6,7 @@
 #   cp deploy/.env.example deploy/.env      # then change the passwords
 #   docker compose -f deploy/compose.dev.yaml --env-file deploy/.env up -d --wait
 #
-# Application services core and media (T-207) start with the "apps" profile; see deploy/e2e.
+# Application services core, media and report (T-207) start with the "apps" profile; see deploy/e2e.
 name: inspecto-dev
 
 services:
@@ -145,6 +145,8 @@ services:
       CORE_DB_MIGRATOR_PASSWORD: ${CORE_MIGRATOR_PASSWORD:?}
       CORE_MEDIA_URL: http://media:8082
       CORE_MEDIA_CLIENT_SECRET: ${MEDIA_CLIENT_SECRET:?set in deploy/.env, at least 32 characters}
+      CORE_REPORT_URL: http://report:8083
+      CORE_REPORT_CLIENT_SECRET: ${REPORT_CLIENT_SECRET:?set in deploy/.env, at least 32 characters}
       # No CORE_JWT_PRIVATE_KEY: core generates a signing key at start (development only).
     ports:
       - "127.0.0.1:8081:8081"
@@ -175,10 +177,42 @@ services:
       - "127.0.0.1:8082:8082"
     networks: [data, services]
 
+  report:
+    profiles: [apps]
+    build: ../../report-service
+    image: inspecto/report-service:dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3-init:
+        condition: service_completed_successfully
+      gotenberg:
+        condition: service_healthy
+      core:
+        condition: service_healthy
+      media:
+        condition: service_healthy
+    environment:
+      REPORT_DB_URL: postgres://postgres:5432/inspecto_report?sslmode=require
+      REPORT_DB_APP_PASSWORD: ${REPORT_APP_PASSWORD:?}
+      REPORT_DB_MIGRATOR_PASSWORD: ${REPORT_MIGRATOR_PASSWORD:?}
+      REPORT_JWKS_URL: http://core:8081/api/v1/.well-known/jwks.json
+      REPORT_CORE_URL: http://core:8081
+      REPORT_CORE_CLIENT_SECRET: ${REPORT_CLIENT_SECRET:?}
+      REPORT_MEDIA_URL: http://media:8082
+      REPORT_GOTENBERG_URL: http://gotenberg:3000
+      REPORT_S3_ENDPOINT: http://s3:8333
+      REPORT_S3_ACCESS_KEY: ${S3_REPORT_ACCESS_KEY:?}
+      REPORT_S3_SECRET_KEY: ${S3_REPORT_SECRET_KEY:?}
+    ports:
+      - "127.0.0.1:8083:8083"
+    # The only service in "render": Gotenberg is reachable from report-service alone.
+    networks: [data, services, render]
+
 networks:
   data: {}
   render: {}
-  # core and media talk to each other here; nginx joins it in T-505.
+  # core, media and report talk to each other here; nginx joins it in T-505.
   services: {}
 
 volumes:
