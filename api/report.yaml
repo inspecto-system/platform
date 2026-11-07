@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Inspecto report-service API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Asynchronous PDF report generation (ADR-011, ADR-012).
     External paths are served behind nginx under `/api/v1/reports`; `/internal/v1/**` accepts only service tokens.
@@ -24,6 +24,12 @@ paths:
       tags: [reports]
       operationId: requestReport
       summary: Request a PDF report for an inspection
+      description: |
+        The user needs read access to the property of the inspection (`404` otherwise); only a `COMPLETED`
+        inspection can be reported (`409 INVALID_STATE_TRANSITION`). The PDF embeds every photo of the defects
+        (variant `preview`) and fonts; a PDF larger than the configured limit (20 MB by default) fails with
+        `REPORT_TOO_LARGE`. A repeated request with the same `Idempotency-Key` from the same user returns the
+        job created by the first one.
       parameters:
         - $ref: 'common.yaml#/components/parameters/IdempotencyKey'
       requestBody:
@@ -50,6 +56,8 @@ paths:
           $ref: 'common.yaml#/components/responses/Unauthorized'
         '404':
           $ref: 'common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: 'common.yaml#/components/responses/Conflict'
         '429':
           $ref: 'common.yaml#/components/responses/TooManyRequests'
         '503':
