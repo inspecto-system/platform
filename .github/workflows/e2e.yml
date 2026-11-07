@@ -23,7 +23,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: platform
-      # The compose file builds the services from sibling clones (../../core-service, ../../media-service).
+      # The compose file builds the services from sibling clones (../../core-service, ../../media-service,
+      # ../../report-service).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: inspecto-system/core-service
@@ -32,6 +33,10 @@ jobs:
         with:
           repository: inspecto-system/media-service
           path: media-service
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: inspecto-system/report-service
+          path: report-service
       - name: Start services
         run: |
           cp platform/deploy/.env.example platform/deploy/.env
@@ -40,7 +45,7 @@ jobs:
         run: sh platform/deploy/e2e/run.sh
       - name: Logs on failure
         if: failure()
-        run: $COMPOSE logs --no-color core media
+        run: $COMPOSE logs --no-color core media report
       - name: Stop
         if: always()
         run: $COMPOSE down -v

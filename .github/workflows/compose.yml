@@ -23,6 +23,10 @@ jobs:
         run: |
           cp deploy/.env.example deploy/.env
           $COMPOSE up -d --wait --wait-timeout 300
+      # "up --wait" does not wait for one-shot jobs to finish: the buckets exist only after s3-init exits.
+      - name: Wait for buckets
+        timeout-minutes: 2
+        run: $COMPOSE wait s3-init
       - name: PostgreSQL — TLS, roles and isolation
         run: |
           set -a; . deploy/.env; set +a
