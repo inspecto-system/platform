@@ -166,6 +166,7 @@ services:
       CORE_REPORT_URL: http://report:8083
       CORE_REPORT_CLIENT_SECRET: ${REPORT_CLIENT_SECRET:?set in deploy/.env, at least 32 characters}
       CORE_ML_CLIENT_SECRET: ${ML_CLIENT_SECRET:?set in deploy/.env, at least 32 characters}
+      CORE_ML_URL: http://ml:8084
       # No CORE_JWT_PRIVATE_KEY: core generates a signing key at start (development only).
     ports:
       - "127.0.0.1:8081:8081"
