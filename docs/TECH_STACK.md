@@ -9,7 +9,7 @@
 | report-service | Go, chi, pgx, golang-migrate, AWS SDK for Go v2 (S3), `html/template` | Фоновые задания и работа с файлами; `html/template` автоматически экранирует данные |
 | PDF-рендеринг | Gotenberg (headless Chromium) | Качественная вёрстка HTML/CSS, кириллица, разрывы страниц (ADR-012) |
 | ml-service | Python, FastAPI, ONNX Runtime, Pillow, Pydantic | Лёгкий CPU-инференс без PyTorch в проде |
-| ML-исследование | PyTorch, timm, scikit-learn, Google Colab (GPU) | Стандарт для transfer learning; метрики sklearn |
+| ML-исследование | PyTorch, timm, scikit-learn; обучение локально на CPU (ADR-027) | Стандарт для transfer learning; метрики sklearn |
 | Web | Next.js (App Router), React, TypeScript (strict), Tailwind CSS, shadcn/ui, TanStack Query, next-intl, openapi-typescript | Типобезопасность от контракта до UI; доступные компоненты |
 | Android | Kotlin, Jetpack Compose, ViewModel, Hilt, Room, Retrofit + OkHttp, kotlinx.serialization, CameraX, WorkManager, Coil, DataStore | Современный рекомендуемый стек Android |
 | База данных | PostgreSQL 16 | Требование проекта; транзакции, `jsonb`, надёжность |
