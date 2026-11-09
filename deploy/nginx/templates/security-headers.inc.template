@@ -3,5 +3,7 @@
 include /etc/nginx/conf.d/common-headers.inc;
 add_header X-Content-Type-Options "nosniff" always;
 add_header Referrer-Policy "no-referrer" always;
+# Photos and PDF files of the API cannot be embedded by pages of other origins.
+add_header Cross-Origin-Resource-Policy "same-origin" always;
 # The API returns only JSON and files: nothing in it may load or run anything. The web app sets its own policy.
 add_header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'" always;
