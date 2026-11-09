@@ -52,3 +52,12 @@ pdfs="$(reports "property_id = '$deleted'")"
 left="$(bytes reports "$deleted")"
 [ "$pdfs" = 0 ] && [ "$left" = 0 ] || { echo "   FAILED: $pdfs reports and $left bytes of property $deleted" >&2; exit 1; }
 echo "   ok: no reports in inspecto_report, no bytes in bucket reports"
+
+# T-604: the same stack without ml-service. The container is started again whatever the result, so
+# that a failed check does not leave the stack degraded.
+printf '\n== ml-service stopped (T-604)\n'
+docker stop inspecto-dev-ml-1 > /dev/null
+trap 'docker start inspecto-dev-ml-1 > /dev/null; rm -f "$log"' EXIT
+docker run --rm --network inspecto-dev_services -v "$here:/e2e:ro" alpine:3.22.8 \
+  sh -c 'apk add --no-cache curl jq > /dev/null && sh /e2e/ml.sh' > "$log" 2>&1 || { cat "$log"; exit 1; }
+cat "$log"

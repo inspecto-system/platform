@@ -15,7 +15,9 @@ core, media и report через один хост, веб-приложение 
 `run.sh` запускает оба сценария, а затем проверяет снаружи, что в базах core, media и report и в бакетах `photos` и
 `reports` SeaweedFS не осталось ничего от удалённого аккаунта и удалённого объекта.
 
-Запуск (нужны клоны `core-service`, `media-service`, `report-service` и `web` рядом с `platform`; в
+Последним `run.sh` останавливает контейнер ml-service и запускает `ml.sh` (T-604, TESTING INT-01): запрос подсказок отвечает `200 {items: []}` быстрее 5 с (core ждёт ml-service не дольше 3 с), чужое фото — по-прежнему `404`, дефект создаётся и фото прикрепляется как обычно. ml-service запускается снова при любом исходе.
+
+Запуск (нужны клоны `core-service`, `media-service`, `report-service`, `web` и `ml` рядом с `platform`; в
 Git Bash — с `MSYS_NO_PATHCONV=1`):
 
 ```bash
