@@ -38,7 +38,7 @@
 
 ## 3. Единые правила для всех репозиториев
 
-- Переиспользуемые workflow GitHub Actions лежат в `platform/.github/workflows/` (`java-gradle.yml`, `go.yml`, `security.yml`, `container.yml`; `workflow_call`) и подключаются из сервисных репозиториев одной строкой; общие конфигурации линтеров — в `platform/quality/` (см. `quality/README.md`).
+- Переиспользуемые workflow GitHub Actions лежат в `platform/.github/workflows/` (`java-gradle.yml`, `go.yml`, `android.yml`, `node.yml`, `python.yml`, `security.yml`, `container.yml`; `workflow_call`) и подключаются из сервисных репозиториев одной строкой; общие конфигурации линтеров — в `platform/quality/` (см. `quality/README.md`).
 - Версии инструментов закреплены (не `latest`); действия GitHub Actions закреплены по SHA коммита.
 - Кеширование зависимостей (Gradle, Go modules, npm, pip) обязательно; запуск только по изменённым путям там, где это безопасно.
 - Защита ветки `main`: только через PR, обязательные проверки CI, запрет force push (ADR-021).
@@ -73,7 +73,7 @@
 | media-service, report-service | `make lint test` (golangci-lint, govulncheck, `go test -race -cover`) |
 | android | `./gradlew ktlintCheck detekt lint testDebugUnitTest koverVerify` |
 | web | `npm run format:check && npm run lint && npm run typecheck && npm test` |
-| ml | `ruff format --check . && ruff check . && mypy . && pytest --cov` |
+| ml | `cd training && uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run pytest --cov` |
 | platform | `npx markdownlint-cli2 "**/*.md"` |
 
 Точные команды фиксируются в README каждого репозитория при создании каркаса.
