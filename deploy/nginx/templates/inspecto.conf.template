@@ -94,6 +94,10 @@ server {
   # so they are not rate-limited (the limit protects the API and the pages that run code).
   location ^~ /_next/static/ {
     include /etc/nginx/conf.d/common-headers.inc;
+    # Pages get these from the web app (web/src/proxy.ts); its static files do not (OWASP ZAP 10021, 10063).
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    add_header Cross-Origin-Resource-Policy "same-origin" always;
     proxy_pass http://web;
   }
 
