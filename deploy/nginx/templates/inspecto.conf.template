@@ -14,6 +14,8 @@ log_format inspecto escape=json
 # Sign-in and registration: 5 requests a minute per IP (SECURITY.md §2); the rest of the API: 20 a second.
 limit_req_zone $binary_remote_addr zone=auth:10m rate=5r/m;
 limit_req_zone $binary_remote_addr zone=api:10m rate=20r/s;
+# Pages of the web app: one navigation loads the page and prefetches the next ones.
+limit_req_zone $binary_remote_addr zone=web:10m rate=30r/s;
 limit_req_status 429;
 
 upstream core { server core:8081; }
@@ -88,9 +90,16 @@ server {
   location ^~ /actuator { return 404 '{"type":"https://inspecto.dev/problems/not-found","title":"Not Found","status":404,"code":"NOT_FOUND","requestId":"$request_id"}'; default_type application/problem+json; }
 
   # Everything else is the web app (T-501), which sets its own CSP with a nonce per page.
+  # Static files of the web app: immutable, named by their hash; a page load fetches dozens of them,
+  # so they are not rate-limited (the limit protects the API and the pages that run code).
+  location ^~ /_next/static/ {
+    include /etc/nginx/conf.d/common-headers.inc;
+    proxy_pass http://web;
+  }
+
   location / {
     include /etc/nginx/conf.d/common-headers.inc;
-    limit_req zone=api burst=40 nodelay;
+    limit_req zone=web burst=60 nodelay;
     proxy_pass http://web;
   }
 

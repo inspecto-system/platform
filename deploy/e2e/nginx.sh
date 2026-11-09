@@ -68,7 +68,14 @@ grep -qi '^content-type: text/html' /tmp/ngx-headers || fail "/ is not the web a
 case "$(header Content-Security-Policy)" in *"'nonce-"*"'strict-dynamic'"*) ;; *) fail "web CSP: $(header Content-Security-Policy)" ;; esac
 case "$(header Strict-Transport-Security)" in max-age=*) ;; *) fail "web page without HSTS" ;; esac
 grep -q 'Inspecto' /tmp/ngx-body || fail "web page has no title"
-ok "/ is the web app: one CSP with a nonce, HSTS from nginx"
+asset="$(grep -o '/_next/static/[^"]*\.js' /tmp/ngx-body | head -1)"
+[ -n "$asset" ] || fail "no static script on the web page"
+# A page load fetches dozens of static files: they must not run into the rate limit of the API.
+for _ in $(seq 1 80); do
+  call GET "https://$HOST$asset"
+  [ "$(status)" = 200 ] || fail "static file $asset answered $(status)"
+done
+ok "/ is the web app: one CSP with a nonce, HSTS from nginx; 80 static files in a row are not rate-limited"
 
 step "Internal endpoints and actuators are not published (ADR-013)"
 for path in /internal/v1/reports /internal/v1/access/properties/x /actuator/health /health/ready; do
