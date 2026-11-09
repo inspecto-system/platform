@@ -15,10 +15,10 @@
 | `.github/workflows/java-gradle.yml` | Сборка, Spotless, Checkstyle, PMD, SpotBugs, тесты, JaCoCo | `uses: inspecto-system/platform/.github/workflows/java-gradle.yml@main` |
 | `.github/workflows/go.yml` | golangci-lint, сборка, тесты с `-race`, порог покрытия, govulncheck | `uses: inspecto-system/platform/.github/workflows/go.yml@main` |
 | `.github/workflows/container.yml` | Сборка образа из Dockerfile сервиса, проверка непривилегированного пользователя, Trivy (High/Critical с исправлением блокируют) | `uses: inspecto-system/platform/.github/workflows/container.yml@main` с `image: inspecto/<сервис>` |
+| `.github/workflows/node.yml` | Prettier, ESLint, `tsc`, Vitest с порогами покрытия, `next build`, по желанию Playwright | `uses: inspecto-system/platform/.github/workflows/node.yml@main` |
+| `.github/workflows/python.yml` | ruff format, ruff (в том числе правила bandit `S`), mypy strict, pytest с порогом покрытия из `pyproject.toml`; зависимости — `uv sync --locked` | `uses: inspecto-system/platform/.github/workflows/python.yml@main` с `working-directory: <каталог проекта>` |
 | `.github/workflows/android.yml` | ktlint, detekt, Android Lint, unit-тесты, Kover, `assembleDebug` | `uses: inspecto-system/platform/.github/workflows/android.yml@main` |
 | `.github/workflows/security.yml` | Gitleaks, Dependency Review, CodeQL | `uses: inspecto-system/platform/.github/workflows/security.yml@main` |
-
-Workflow для Web и Python добавляются вместе с каркасами этих компонентов (T-501, T-601).
 
 Вызывающий workflow должен выдать права не меньше тех, что запрашивает переиспользуемый: `contents: write` для `java-gradle.yml` и `android.yml` (отправка графа зависимостей), `security-events: write` для `security.yml` (CodeQL), иначе запуск завершается ошибкой `startup_failure`.
 
