@@ -165,6 +165,7 @@ services:
       CORE_MEDIA_CLIENT_SECRET: ${MEDIA_CLIENT_SECRET:?set in deploy/.env, at least 32 characters}
       CORE_REPORT_URL: http://report:8083
       CORE_REPORT_CLIENT_SECRET: ${REPORT_CLIENT_SECRET:?set in deploy/.env, at least 32 characters}
+      CORE_ML_CLIENT_SECRET: ${ML_CLIENT_SECRET:?set in deploy/.env, at least 32 characters}
       # No CORE_JWT_PRIVATE_KEY: core generates a signing key at start (development only).
     ports:
       - "127.0.0.1:8081:8081"
@@ -226,6 +227,28 @@ services:
       - "127.0.0.1:8083:8083"
     # The only service in "render": Gotenberg is reachable from report-service alone.
     networks: [data, services, render]
+
+  ml:
+    profiles: [apps]
+    build: ../../ml
+    image: inspecto/ml-service:dev
+    depends_on:
+      core:
+        condition: service_healthy
+      media:
+        condition: service_healthy
+    environment:
+      ML_CORE_URL: http://core:8081
+      ML_CORE_CLIENT_SECRET: ${ML_CLIENT_SECRET:?}
+      ML_MEDIA_URL: http://media:8082
+    volumes:
+      # The model (model.onnx + model.json, ml/training export_cli) stays on the owner's PC and is
+      # never in an image. Without it ml-service is live but not ready, and core gets no
+      # suggestions — the degraded mode of T-604.
+      - ${ML_MODEL_DIR:-../../ml/data/models/current}:/models/current:ro
+    ports:
+      - "127.0.0.1:8084:8084"
+    networks: [services]
 
   web:
     # Web app (T-501…T-504), reached only through nginx: https://localhost:8443/
