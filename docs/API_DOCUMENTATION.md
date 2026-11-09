@@ -177,8 +177,8 @@
 | media | GET | `/internal/v1/photos/{id}/content?variant=preview` | report, ml | Байты изображения |
 | media | DELETE | `/internal/v1/photos?propertyId=` / `?ownerId=` | core (outbox) | Массовое удаление |
 | report | DELETE | `/internal/v1/reports?propertyId=` / `?requestedBy=` | core (outbox) | Массовое удаление отчётов |
-| ml | POST | `/internal/v1/classify` | core | `{photoId}` → `{modelVersion, predictions: [{code, probability}]}` (top-3) |
-| ml | GET | `/internal/v1/model` | core | Версия и классы модели |
+| ml | POST | `/internal/v1/classify` | core (scope `ml.classify`) | `{photoId}` → `{modelVersion, predictions: [{code, probability}]}` — до трёх категорий; пустой список, если вероятнее всего «нет дефекта» или уверенность ниже порога модели |
+| ml | GET | `/internal/v1/model` | core (scope `ml.classify`) | Версия, классы, размер входа и порог модели |
 | все | GET | `/health/live`, `/health/ready` | docker compose | Проверки состояния |
 
 Таймауты внутренних вызовов: 2 с (метаданные, доступ), 10 с (байты изображений, данные отчёта), 3 с (классификация). Повторы — только для идемпотентных запросов, до 2 раз.

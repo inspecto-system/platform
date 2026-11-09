@@ -1,10 +1,14 @@
 openapi: 3.1.0
 info:
   title: Inspecto ml-service API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Defect category classification of a photo (ADR-016). Internal only: called by core-service
     with a service token; never exposed through nginx.
+
+    Every endpoint requires a service token of core-service with scope `ml.classify`; any other
+    token is rejected with `401`. To read the photo, ml-service uses its own service token
+    (client `ml-service`, scope `photos.read`) against media-service.
   license:
     name: Proprietary (coursework project)
     identifier: LicenseRef-Inspecto
@@ -22,7 +26,12 @@ paths:
       tags: [internal]
       operationId: classifyPhoto
       summary: Top-3 defect categories for a photo
-      description: The service downloads the `preview` variant from media-service itself. core-service applies a 3 s timeout.
+      description: |
+        The service downloads the `preview` variant from media-service itself. core-service applies
+        a 3 s timeout. Only defect categories are returned: if "no defect" is the most probable
+        class, or the most probable category is below the model threshold (`GET /internal/v1/model`),
+        `predictions` is empty — the client shows no suggestion. `404` — media-service has no such
+        photo; `503` — the model is not loaded or media-service is unavailable.
       requestBody:
         required: true
         content:
@@ -75,7 +84,7 @@ components:
       properties:
         code:
           type: string
-          description: System defect category code (see ML_DOCUMENTATION.md §3.5).
+          description: System defect category code (ML_DOCUMENTATION.md §3.7); never "no defect".
           examples: [CRACK]
         probability:
           type: number
@@ -90,19 +99,27 @@ components:
           examples: ['convnext-tiny-bd3-2026.12.01']
         predictions:
           type: array
+          description: Up to three categories by probability (descending); empty — no suggestion.
           maxItems: 3
           items:
             $ref: '#/components/schemas/Prediction'
     ModelInfo:
       type: object
-      required: [modelVersion, classes, inputSize]
+      required: [modelVersion, classes, inputSize, threshold]
       properties:
         modelVersion:
           type: string
         classes:
           type: array
+          description: Classes of the model, including `NO_DEFECT` if the model has it.
           items:
             type: string
         inputSize:
           type: integer
           examples: [224]
+        threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Minimal probability of the top category for a non-empty answer.
+          examples: [0.5]
