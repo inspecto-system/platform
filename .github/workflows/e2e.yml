@@ -47,6 +47,9 @@ jobs:
           $COMPOSE up -d --build --wait --wait-timeout 600
       - name: CP2 scenario
         run: sh platform/deploy/e2e/run.sh
+      # T-506: passive scan of the web app and the API through nginx; accepted alerts are in deploy/zap/rules.tsv.
+      - name: OWASP ZAP baseline
+        run: sh platform/deploy/zap/baseline.sh
       - name: Logs on failure
         if: failure()
         run: $COMPOSE logs --no-color core media report web nginx

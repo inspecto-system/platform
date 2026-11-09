@@ -6,3 +6,4 @@ docs/architecture/out/*.html
 .env
 deploy/backups/
 deploy/backup.key
+deploy/zap/out/
